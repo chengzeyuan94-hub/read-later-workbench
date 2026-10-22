@@ -1,0 +1,13 @@
+import Database from 'better-sqlite3';
+import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+const dataDir=path.resolve(process.env.RLW_DATA_DIR || path.join(process.env.HOME,'Library/Application Support/ReadLaterWorkbench/data'));
+const db=new Database(path.join(dataDir,'workbench.sqlite'),{readonly:true,nativeBinding:path.resolve('.runtime/node24.node')});
+const mediaDir=path.join(dataDir,'media');
+const contents=db.prepare('SELECT id,platform,source_id,kind,length(source_body) bodyLength,body_complete,detail_state,detail_error,discovery,digested_at,last_reviewed_at,first_discovered_at,published_at,collected_at FROM contents ORDER BY id').all();
+const media=db.prepare('SELECT id,content_id,kind,state,local_path,bytes,mime,error FROM media ORDER BY id').all();
+const offline=contents.filter(c=>{const all=media.filter(m=>m.content_id===c.id);return c.body_complete&&c.detail_state==='succeeded'&&(!['image','video','audio'].includes(c.kind)||all.some(m=>m.kind===c.kind))&&all.every(m=>m.state==='succeeded'&&m.local_path&&fs.existsSync(path.join(mediaDir,m.local_path)));});
+const samples=['image','video'].map(kind=>media.find(m=>m.kind===kind&&m.state==='succeeded')).filter(Boolean).map(m=>({...m,sha256:createHash('sha256').update(fs.readFileSync(path.join(mediaDir,m.local_path))).digest('hex')}));
+const evidence={at:new Date().toISOString(),dataDir,mediaDir,accounts:db.prepare('SELECT platform,baseline_complete FROM accounts').all(),folderCount:db.prepare('SELECT count(*) n FROM folders').get().n,observed:db.prepare('SELECT platform,count(*) n FROM observed GROUP BY platform').all(),contents,mediaStates:db.prepare('SELECT kind,state,count(*) n,sum(bytes) bytes FROM media GROUP BY kind,state').all(),offline:offline.map(c=>c.id),syncs:db.prepare('SELECT * FROM syncs ORDER BY id DESC').all(),samples};
+db.close();const json=JSON.stringify(evidence,null,2);if(process.argv[2])fs.writeFileSync(process.argv[2],json);else console.log(json);

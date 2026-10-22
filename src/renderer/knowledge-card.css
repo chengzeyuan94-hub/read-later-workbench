@@ -1,0 +1,252 @@
+/* Knowledge card: fixed light-paper 1080×1440 poster, independent of app theme. */
+.kc-stage {
+  width: 1080px;
+  height: 1440px;
+  background: #ffffff;
+  padding: 22px 26px 26px 22px;
+  box-sizing: border-box;
+  transform-origin: top left;
+  flex: none;
+}
+.kc-card {
+  box-sizing: border-box;
+  width: 1032px;
+  height: 1392px;
+  background: #ffffff;
+  color: #161616;
+  border: 6px solid #161616;
+  box-shadow: 14px 14px 0 #ff5a1f;
+  display: flex;
+  flex-direction: column;
+  padding: 42px 46px 36px;
+  font-family: 'PingFang SC', -apple-system, 'Noto Sans SC', sans-serif;
+}
+.kc-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 30px;
+  padding-bottom: 22px;
+  border-bottom: 4px dashed #161616;
+}
+.kc-brand {
+  font-family: Pixel, monospace;
+  font-size: 34px;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+.kc-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.kc-parent {
+  margin: 20px 0 0;
+  font-size: 26px;
+  font-weight: 500;
+  color: #161616;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kc-body {
+  margin-top: 26px;
+}
+.kc-viewpoint {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.kc-viewpoint.kc-pixel {
+  font-family: Pixel, 'PingFang SC', sans-serif;
+  letter-spacing: 1px;
+}
+.kc-viewpoint.kc-sans {
+  font-weight: 800;
+}
+.kc-highlight {
+  width: 250px;
+  height: 13px;
+  background: #ffd12e;
+  margin-top: 14px;
+}
+.kc-section-band {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 24px;
+  padding: 10px 18px;
+  background: #161616;
+  color: #ffffff;
+  font-family: Pixel, monospace;
+  font-size: 26px;
+  letter-spacing: 3px;
+}
+.kc-section-band.kc-band-gap { margin-top: 40px; }
+.kc-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+.kc-points li {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+.kc-num {
+  font-family: Pixel, monospace;
+  font-size: 32px;
+  flex: none;
+}
+.kc-bullet {
+  width: 16px;
+  height: 16px;
+  background: #ff5a1f;
+  flex: none;
+  align-self: center;
+}
+.kc-point-text {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.kc-points .kc-more {
+  font-size: 26px;
+  color: #161616;
+  padding-left: 34px;
+}
+.kc-source {
+  margin-top: auto;
+  border: 3px solid #161616;
+  padding: 22px 26px 18px;
+  background: #ffffff;
+}
+.kc-source p {
+  display: flex;
+  align-items: baseline;
+  gap: 22px;
+  margin: 0 0 10px;
+  font-size: 27px;
+  font-weight: 500;
+}
+.kc-source b {
+  font-family: Pixel, monospace;
+  font-size: 26px;
+  font-weight: 400;
+  flex: none;
+  width: 72px;
+}
+.kc-source span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kc-barcode {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed #161616;
+}
+.kc-barcode i {
+  display: block;
+  height: 74px;
+  background: #161616;
+}
+.kc-barcode small {
+  margin-left: auto;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 20px;
+  letter-spacing: 1px;
+}
+.kc-foot {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 3px dashed #161616;
+}
+.kc-foot .avatar-figure {
+  width: 96px;
+  height: 96px;
+  border: 3px solid #161616;
+}
+.kc-foot-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kc-foot-text b {
+  font-family: Pixel, monospace;
+  font-size: 34px;
+  font-weight: 400;
+  letter-spacing: 2px;
+}
+.kc-foot-text p {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 500;
+}
+.kc-foot-app {
+  margin-left: auto;
+  font-size: 22px;
+  color: #161616;
+  align-self: flex-end;
+}
+
+/* Preview dialog (editor workspace chrome; scaled preview only). */
+.e1-modal.kc-dialog {
+  width: min(1060px, calc(100vw - 60px));
+  max-height: calc(100vh - 40px);
+}
+.kc-dialog .kc-preview {
+  width: 300px;
+  height: 400px;
+  overflow: hidden;
+  border: 2px solid var(--e1-line, var(--line));
+  background: #ffffff;
+  flex: none;
+}
+.kc-dialog .kc-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.kc-dialog .kc-fields label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  font-size: 12px;
+  text-align: left;
+}
+.kc-dialog .kc-fields textarea,
+.kc-dialog .kc-fields input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 14px;
+  text-align: left;
+}
+.kc-preview-row {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+  margin: 14px 0;
+}
+.kc-truncated {
+  font-size: 12px;
+  color: var(--danger);
+}

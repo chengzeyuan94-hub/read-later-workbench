@@ -1,0 +1,32 @@
+import {execFileSync} from 'node:child_process';
+import {build} from 'esbuild';
+import {copyFileSync,existsSync,mkdirSync,readFileSync,readdirSync,writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import path from 'node:path';
+import {resolveBatchBuild} from './batch-check-build.mjs';
+const project=process.cwd(),output=resolveBatchBuild(process.env.RLW_BATCH_BUILD),root=process.env.RLW_BATCH_DIR;
+if(!root||path.dirname(root)!==path.join(project,'.acceptance-data/batch-sync')||!/^e42-[-a-zA-Z0-9_]+$/.test(path.basename(root)))throw Error('明确已准备批量资料根后才能构建');
+if(existsSync(output))throw Error('构建目录已存在；请选择新的 batch-e42-* 目录，旧构建保持');
+execFileSync(process.execPath,['--import','tsx','scripts/batch-check-root.ts'],{stdio:'inherit'});
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),hashFile=file=>hash(readFileSync(file));
+const helper=path.join(project,'dist/editor-e112/native'),helperSha256='c7f0c5fa01ac9958dd8769289b4feb7f0d1a6e3bdaf76582e5c7c8c581a94d3a';
+if(hashFile(path.join(helper,'ocr-helper'))!==helperSha256)throw Error('已验收OCR辅助程序不匹配');
+const nativeManifest=JSON.parse(readFileSync(path.join(helper,'build-manifest.json'),'utf8'));
+if(nativeManifest.executableSha256!==helperSha256||nativeManifest.sourceSha256!==hashFile('native/ocr-helper.swift')||nativeManifest.testing!==false||nativeManifest.capability?.engine?.configSha256!=='cf72bc01126184f6ee7ead0d85f8901f75912dd365f26047ff95d9ed05a1cc71')throw Error('OCR来源或配置发生改变');
+function filesIn(base,filter=()=>true){const result={};function walk(dir){for(const item of readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,item.name);if(item.isSymbolicLink())throw Error('构建普通文件拒绝链接');if(item.isDirectory())walk(file);else if(item.isFile()&&filter(file))result[path.relative(base,file)]=hashFile(file);}}walk(base);return result;}
+function inputs(){const result={};for(const dir of ['src','native','spikes/editor-e0'])for(const [name,sha]of Object.entries(filesIn(dir)))result[path.join(dir,name)]=sha;for(const file of ['package.json','package-lock.json','tsconfig.json','tsconfig.main.json','vite.config.ts','scripts/batch-build.mjs','scripts/batch-check-build.mjs','scripts/batch-check-root.ts','scripts/batch-live-control.cjs','scripts/start-batch-e42.sh'])result[file]=hashFile(file);return result;}
+const sourceInputs=inputs(),startedAt=new Date().toISOString();mkdirSync(output,{recursive:true});
+execFileSync(process.execPath,['node_modules/typescript/bin/tsc','--noEmit'],{stdio:'inherit'});
+execFileSync(process.execPath,['node_modules/vite/bin/vite.js','build','--outDir',path.join(output,'renderer')],{stdio:'inherit'});
+execFileSync(process.execPath,['node_modules/typescript/bin/tsc','-p','tsconfig.main.json','--outDir',output],{stdio:'inherit'});
+await build({entryPoints:['src/main/preload.ts'],outfile:path.join(output,'main/preload.cjs'),bundle:true,platform:'node',format:'cjs',external:['electron']});
+mkdirSync(path.join(output,'native'),{recursive:true});for(const name of ['ocr-helper','build-manifest.json'])copyFileSync(path.join(helper,name),path.join(output,'native',name));
+mkdirSync(path.join(output,'qa'),{recursive:true});copyFileSync('scripts/batch-live-control.cjs',path.join(output,'qa/batch-live-control.cjs'));
+if(JSON.stringify(sourceInputs)!==JSON.stringify(inputs()))throw Error('构建时源码发生改变，拒绝混合构建');
+const outputs=filesIn(output),app=path.join(output,'ReadLaterE42.app'),electronSource=path.join(project,'node_modules/electron/dist/Electron.app');
+execFileSync('/bin/cp',['-cR',electronSource,app]);const plist=path.join(app,'Contents/Info.plist');
+for(const command of ['Set :CFBundleIdentifier local.readlater.workbench.e42','Set :CFBundleName ReadLaterE42','Set :CFBundleDisplayName ReadLaterE42'])execFileSync('/usr/libexec/PlistBuddy',['-c',command,plist]);
+execFileSync('/usr/bin/codesign',['--force','--deep','--sign','-',app],{stdio:'pipe'});
+const manifest={kind:'read-later-workbench-batch-build',schema:1,sessionMode:'isolated-five-platforms',startedAt,completedAt:new Date().toISOString(),commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),inputs:sourceInputs,outputs,root,rootMarkerSha256:hashFile(path.join(root,'batch-isolated.json')),helperSha256,app:{bundleId:'local.readlater.workbench.e42',executableSha256:hashFile(path.join(app,'Contents/MacOS/Electron')),plistSha256:hashFile(plist),electron:JSON.parse(readFileSync('node_modules/electron/package.json')).version}};
+writeFileSync(path.join(output,'build-inputs.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
+console.log(JSON.stringify({build:output,app,root,sourceInputs:Object.keys(sourceInputs).length,productOutputs:Object.keys(outputs).length}));

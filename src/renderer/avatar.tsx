@@ -1,0 +1,154 @@
+import { useEffect, useRef, type Ref } from 'react';
+
+const MAX_X = 4;
+const MAX_Y = 3;
+
+function canHoverFollow(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function prefersReducedMotion(): boolean {
+  return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+}
+
+function AvatarArt({ leftRef, rightRef }: { leftRef?: Ref<SVGGElement>; rightRef?: Ref<SVGGElement> }) {
+  return (
+    <svg viewBox="0 0 385.35 385.35" aria-hidden="true">
+      <g id="avatar-head">
+        <path fill="#231815" d="M371.4,322.85c-16.83-3.09-30.09-15.07-32.06-30.8-1.23-9.86,2.09-19.65,9.35-27.57a47.55,47.55,0,0,1,59.3-7.42c9,5.89,14.62,14.57,15.85,24.43h0c1.23,9.86-2.09,19.65-9.35,27.57a46,46,0,0,1-28.34,14.19A48.65,48.65,0,0,1,371.4,322.85Zm19.1-64.69a40.89,40.89,0,0,0-12.52-.33,38.43,38.43,0,0,0-23.69,11.78c-5.73,6.25-8.36,13.88-7.41,21.5,2,16,19.19,27,38.33,24.6a38.41,38.41,0,0,0,23.68-11.78c5.73-6.25,8.36-13.89,7.41-21.5h0c-.95-7.61-5.38-14.37-12.47-19A35.92,35.92,0,0,0,390.5,258.16Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M132.72,345.05c-16.83-3.09-30.09-15.07-32.06-30.8-2.51-20.11,14.4-38.85,37.69-41.76s44.3,11.09,46.81,31.2h0c2.52,20.11-14.39,38.85-37.69,41.76A48,48,0,0,1,132.72,345.05Zm19.07-64.69a41.29,41.29,0,0,0-12.5-.33c-19.13,2.39-33.08,17.32-31.09,33.28s19.2,27,38.33,24.6,33.09-17.32,31.09-33.28h0C176.08,292.28,165.41,282.87,151.79,280.36Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#fff" d="M143.77,327.12s-5.84-80.92.39-110.82,31.53-63,72.51-68.75,104.94-19.9,131.27,21.9,23.25,90.77,28.42,110.94,4.87,37.86,5.11,52.68-7.39,56.31-109.82,54.5C176.08,385.88,146.09,374.86,143.77,327.12Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M197.69,385.84c-10.79-2-19.39-4.54-26.52-7.77-20.3-9.19-29.93-24.83-31.19-50.72-.29-3.94-5.78-81.88.46-111.83,6.53-31.31,32.47-65.63,75.7-71.73,3.61-.51,7.4-1.08,11.32-1.68,41.52-6.28,98.37-14.9,123.69,25.31,19.65,31.19,23.23,65.45,25.84,90.46.92,8.77,1.71,16.35,3.05,21.56,4.79,18.73,5,35,5.17,49.35l.05,4.22c.14,8.59-2.13,21.25-13.67,32.77-17.87,17.84-51.52,26.45-100,25.59C239,390.8,215.38,389.09,197.69,385.84ZM304,146.23c-23.94-4.39-52.17-.12-75.37,3.4-3.95.6-7.76,1.17-11.4,1.69-39.37,5.55-63.53,38-69.32,65.75-6,29.05-.38,109-.32,109.78v.08c2.11,43.45,27.64,55.14,124.16,56.85,45.69.8,78.37-7.28,94.5-23.38,9.66-9.64,11.56-20.15,11.45-27.27l-.06-4.25c-.17-13.93-.36-29.71-4.93-47.55-1.47-5.75-2.29-13.59-3.24-22.66-2.54-24.27-6-57.51-24.71-87.2C335.39,156.64,320.73,149.31,304,146.23Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#2c2c2b" d="M248.43,114.42s-11.14-14.51-22.89-13.55-5.74,7-5.74,7,7.56,5,6.25,9.61S150.66,130.31,135,181.75s-9.55,81.08-8.28,91.11,19-59.75,30.57-71.87,22.44,1.45,36.06,9.74,25.29,12.66,35.35,13.62,47.83-1.22,60.77-3.53c14.73-2.64,53.87-12.12,61.18-15.49,4.83-2.22,28.28,28.86,38.4,38.23,6.52,15.47,8.76-81.66-40.5-111.64s-78-23.69-81.45-22.09S277.81,92.66,280,93.05s-14.86-11.19-21.58-1.29S248.43,114.42,248.43,114.42Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M125.45,273c-1-.19-3.11-1-3.52-4.21-.09-.73-.21-1.56-.34-2.51-1.74-12.12-5.79-40.53,8.5-87.4,12.26-40.24,58.11-54.06,80.14-60.7,2.88-.87,6.06-1.82,7.84-2.5a14.79,14.79,0,0,0-4.2-4.19l-.6-.48c-1.73-1.73-3.36-4.83-2.24-7.88,1.71-4.65,8.08-5.17,10.17-5.34,8.39-.68,16.13,5,20.85,9.52a75.68,75.68,0,0,1,8.16-16.7c4.3-6.34,12.53-7.33,22-2.65,3.42,1.68,7,3.77,5.83,7.2l-1,3.14L275,97.92a62.43,62.43,0,0,0-6,7c13.31-1,39,2.29,73.76,23.46,40.39,24.58,41.68,91.23,41.07,109.85a15.77,15.77,0,0,1,0,1.82c0,.75-.05,1.22-.05,1.43h-.11c-.06,1-.12,1.58-.14,1.63l-1.2,3-3.15-.68c-3.19-.71-3-3.75-2.94-5.76.21-4-2.65-9.51-8-15.45-9.12-10-21.26-17.09-24.43-17.67l-.11,0c-8.26,2.74-45.13,12.46-59.49,15-12.82,2.29-49.79,4.43-59.94,3.46-10.62-1-22.36-5.5-35.88-13.73-3-1.83-5.81-3.86-8.52-5.83-11.05-8-15.79-10.45-21.72-4.24-5.69,6-14.13,30.88-19.71,47.37-7.45,22-8.4,24.83-12.62,24.41ZM219,105.76c2.61,1.92,8.35,6.92,6.69,12.86-.85,3.06-3.73,3.93-13.25,6.8-20.77,6.25-64,19.28-75.07,55.64-10.86,35.65-10.76,60.11-9.41,74.57,1.05-3,2.17-6.32,3.23-9.47,8-23.53,15.08-43.55,21.42-50.19,11.07-11.59,22-3.66,31.67,3.34,2.59,1.88,5.27,3.82,8,5.49,12.34,7.51,23.33,11.77,32.65,12.66,9.51.91,45.76-1.21,57.88-3.38,14-2.51,51.66-12.43,58.75-14.86,4.9-1.69,14.71,4.89,20.12,9A86.36,86.36,0,0,1,376,221.77c-1.44-25.52-8.29-69.26-37.27-86.89-49-29.79-75.14-21.32-75.37-21.21a4.09,4.09,0,0,1-4.83-.8c-2.12-2.25-.56-5.11-.05-6.05a81.16,81.16,0,0,1,9.37-12.56c-2.32-1-5.28-1.9-7.77-1.58a4.79,4.79,0,0,0-3.62,2.16c-6.07,8.94-9.08,20.65-9.11,20.77l-1.93,7.59L240.69,117c-2.66-3.46-11.25-12.3-18.87-11.67A16.87,16.87,0,0,0,219,105.76Z" transform="translate(-55.65 -55.38)" />
+        <rect fill="#c2e4f1" x="144.1" y="253.16" width="112.39" height="72.08" rx="0.78" transform="translate(-74.24 -41.58) rotate(-3.77)" />
+        <rect fill="#c2e4f1" x="267.7" y="244.62" width="112.39" height="72.08" rx="0.78" transform="translate(-73.41 -33.47) rotate(-3.77)" />
+        <path fill="#231815" d="M160.17,336.9A26.05,26.05,0,0,1,138.91,313l-2-29.7a26,26,0,0,1,24.25-27.67L232.3,251A26,26,0,0,1,260,275.22l2,29.7a26.09,26.09,0,0,1-24.24,27.67l-71.1,4.68A25.73,25.73,0,0,1,160.17,336.9Zm77.16-78.08a18.39,18.39,0,0,0-4.53-.27l-71.1,4.69a18.45,18.45,0,0,0-17.17,19.59l2,29.7a18.48,18.48,0,0,0,19.59,17.16l71.1-4.68a18.44,18.44,0,0,0,17.16-19.59l-2-29.7A18.43,18.43,0,0,0,237.33,258.82Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M287.39,328.11a26.05,26.05,0,0,1-21.26-23.88l-2-29.69a26.05,26.05,0,0,1,24.25-27.67l71.1-4.69a26.09,26.09,0,0,1,27.66,24.25l2,29.7a26.06,26.06,0,0,1-24.25,27.66l-71.09,4.69A25.73,25.73,0,0,1,287.39,328.11ZM364.54,250a18.4,18.4,0,0,0-4.52-.26l-71.1,4.69A18.44,18.44,0,0,0,271.75,274l2,29.7A18.5,18.5,0,0,0,293.3,320.9l71.09-4.69a18.48,18.48,0,0,0,17.17-19.58l-2-29.7a18.26,18.26,0,0,0-6.25-12.62A18.48,18.48,0,0,0,364.54,250Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#fff" d="M270.14,240.5s18.25-13.12,32.12-12.9" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M269.46,244.23a3.8,3.8,0,0,1-1.53-6.82c.78-.56,19.43-13.85,34.39-13.61a3.8,3.8,0,0,1-.12,7.6c-12.44-.2-29.67,12.06-29.84,12.18A3.78,3.78,0,0,1,269.46,244.23Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#fff" d="M245.94,243.24s-21.58-10.42-36.71-8.22" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M245.25,247a3.87,3.87,0,0,1-1-.32c-.21-.09-20.72-9.88-34.51-7.88a3.8,3.8,0,0,1-1.09-7.52c16.08-2.34,38,8.11,38.9,8.56a3.8,3.8,0,0,1-2.34,7.16Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#fff" d="M286.66,343.59c.32,9.22-9.92,17-22.85,17.48s-23.67-6.68-24-15.89" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M256.2,364.3A30.17,30.17,0,0,1,245,359.91c-5.59-3.7-8.77-8.89-9-14.6a3.8,3.8,0,1,1,7.59-.26c.11,3.19,2.08,6.22,5.56,8.53a24.94,24.94,0,0,0,14.5,3.69c10.64-.36,19.42-6.56,19.19-13.55a3.8,3.8,0,1,1,7.59-.25c.38,11.29-11.51,20.89-26.52,21.39A35.94,35.94,0,0,1,256.2,364.3Z" transform="translate(-55.65 -55.38)" />
+        <ellipse fill="#f2ccc3" cx="178.86" cy="338.21" rx="11.72" ry="11.9" transform="translate(-241.75 397.65) rotate(-79.59)" />
+        <ellipse fill="#f2ccc3" cx="351.53" cy="329.38" rx="12.4" ry="11.25" transform="translate(-176.81 181.08) rotate(-32.02)" />
+      </g>
+      <g id="eye-left-base" ref={leftRef}>
+        <path fill="#231815" d="M168.49,288.31a3.8,3.8,0,0,1,.51-7.53l75.88-3.62a3.8,3.8,0,0,1,.37,7.59l-75.89,3.62A4.15,4.15,0,0,1,168.49,288.31Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M246.65,287.64a23.43,23.43,0,0,1-46.8,2.23C199.24,277,246,274.72,246.65,287.64Z" transform="translate(-55.65 -55.38)" />
+        <g id="eye-left-star" className="avatar-star avatar-star--left">
+          <path fill="var(--yellow)" d="M263.29,271.19c-14.63-1.66-15.3-1.73-19-20.37.76,18.3-4.43,19.79-17.26,21.6,20.88.05,18.16,24.11,20.14,46.92C247.08,292.44,242.58,276.15,263.29,271.19Z" transform="translate(-55.65 -55.38)" />
+        </g>
+      </g>
+      <g id="eye-right-base" ref={rightRef}>
+        <path fill="#231815" d="M279.16,283a3.8,3.8,0,0,1,.5-7.53l75.89-3.63a3.8,3.8,0,0,1,.36,7.59L280,283.09A4.15,4.15,0,0,1,279.16,283Z" transform="translate(-55.65 -55.38)" />
+        <path fill="#231815" d="M357.32,282.35a23.43,23.43,0,1,1-46.8,2.24C309.9,271.67,356.7,269.43,357.32,282.35Z" transform="translate(-55.65 -55.38)" />
+        <g id="eye-right-star" className="avatar-star avatar-star--right">
+          <path fill="var(--yellow)" d="M377.15,267.23c-14.74-1.68-15.41-1.75-19.13-20.53.76,18.43-4.46,19.94-17.38,21.76,21,.05,18.29,24.29,20.28,47.27C360.82,288.63,356.29,272.21,377.15,267.23Z" transform="translate(-55.65 -55.38)" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/** Static avatar figure for empty states, badges and print surfaces. */
+export function AvatarImage({ className = '' }: { className?: string }) {
+  return <span className={`avatar-figure ${className}`.trim()} aria-hidden="true"><AvatarArt /></span>;
+}
+
+export function AvatarMascot() {
+  const rootRef = useRef<HTMLButtonElement>(null);
+  const leftRef = useRef<SVGGElement>(null);
+  const rightRef = useRef<SVGGElement>(null);
+  const rafRef = useRef(0);
+  const targetRef = useRef({ x: 0, y: 0 });
+  const starTimerRef = useRef(0);
+
+  useEffect(() => {
+    const button = rootRef.current;
+    const left = leftRef.current;
+    const right = rightRef.current;
+    if (!button || !left || !right) return;
+
+    const current = { x: 0, y: 0 };
+    const apply = (x: number, y: number) => {
+      const t = `translate(${x} ${y})`;
+      left.setAttribute('transform', t);
+      right.setAttribute('transform', t);
+    };
+
+    const tick = () => {
+      current.x += (targetRef.current.x - current.x) * 0.28;
+      current.y += (targetRef.current.y - current.y) * 0.28;
+      if (Math.abs(current.x) < 0.02 && Math.abs(targetRef.current.x) === 0) current.x = 0;
+      if (Math.abs(current.y) < 0.02 && Math.abs(targetRef.current.y) === 0) current.y = 0;
+      apply(current.x, current.y);
+      const moving = Math.abs(current.x - targetRef.current.x) > 0.02 || Math.abs(current.y - targetRef.current.y) > 0.02;
+      rafRef.current = moving ? requestAnimationFrame(tick) : 0;
+    };
+
+    const queue = (x: number, y: number) => {
+      targetRef.current = { x, y };
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!canHoverFollow()) return;
+      const rect = button.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const nx = Math.max(-1, Math.min(1, (e.clientX - cx) / Math.max(24, rect.width)));
+      const ny = Math.max(-1, Math.min(1, (e.clientY - cy) / Math.max(24, rect.height)));
+      queue(nx * MAX_X, ny * MAX_Y);
+    };
+
+    const reset = () => queue(0, 0);
+
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') reset();
+    };
+
+    const onPageOut = (e: MouseEvent) => {
+      if (!e.relatedTarget) reset();
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('mouseout', onPageOut);
+    window.addEventListener('blur', reset);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('mouseout', onPageOut);
+      window.removeEventListener('blur', reset);
+      document.removeEventListener('visibilitychange', onVis);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.clearTimeout(starTimerRef.current);
+    };
+  }, []);
+
+  const sparkle = () => {
+    const el = rootRef.current;
+    if (!el) return;
+    el.classList.remove('is-star-active');
+    void el.offsetWidth;
+    el.classList.add('is-star-active');
+    window.clearTimeout(starTimerRef.current);
+    const ms = prefersReducedMotion() ? 300 : 780;
+    starTimerRef.current = window.setTimeout(() => el.classList.remove('is-star-active'), ms);
+  };
+
+  return (
+    <button
+      ref={rootRef}
+      type="button"
+      className="avatar-mascot"
+      aria-label="L叔头像，点击触发星星眼"
+      onClick={sparkle}
+    >
+      <AvatarArt leftRef={leftRef} rightRef={rightRef} />
+    </button>
+  );
+}

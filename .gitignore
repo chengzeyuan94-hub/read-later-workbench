@@ -1,0 +1,29 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+.runtime/
+
+# 本地数据与运行状态（绝不提交）
+.acceptance-data/
+.test-data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.part
+*.log
+logs/
+coverage/
+releases/
+
+# 密钥与本地环境
+.env
+.env.*
+!.env.example
+*.key
+*.encrypted
+
+# 系统文件
+.DS_Store

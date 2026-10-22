@@ -1,0 +1,56 @@
+{
+  "name": "read-later-workbench",
+  "productName": "收藏阅读工作台",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "main": "dist/main/main.js",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.main.json && node scripts/build-preload.mjs",
+    "start": "electron .",
+    "dev": "npm run build && electron .",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "native:prepare": "node scripts/native.mjs",
+    "native:verify": "node scripts/sqlite-probe.cjs && electron scripts/sqlite-probe.cjs",
+    "fixture:prepare": "node --import tsx scripts/prepare-fixture.ts",
+    "fixture:playback": "electron scripts/playback-smoke.cjs",
+    "verify": "npm run typecheck && npm test && npm run build && npm run native:verify",
+    "e0:typecheck": "tsc --noEmit -p spikes/editor-e0/tsconfig.json",
+    "e0:build": "npm run e0:typecheck && vite build --config spikes/editor-e0/vite.config.ts && node scripts/build-editor-e0.mjs",
+    "e0:test": "node --import tsx --test spikes/editor-e0/tests/*.test.ts tests/e0-*.test.ts",
+    "batch:prepare": "node --import tsx scripts/batch-clone.ts",
+    "batch:build": "node scripts/batch-build.mjs",
+    "batch:start": "zsh scripts/start-batch-e42.sh",
+    "batch:test": "node --import tsx --test tests/batch-*.test.ts tests/social-sources.test.ts tests/twitter-source.test.ts tests/source-account-cache.test.ts",
+    "batch:audit": "node --import tsx scripts/batch-audit.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "fflate": "0.8.3",
+    "prosemirror-commands": "1.7.2",
+    "prosemirror-history": "1.5.1",
+    "prosemirror-keymap": "1.2.3",
+    "prosemirror-model": "1.25.12",
+    "prosemirror-state": "1.4.4",
+    "prosemirror-view": "1.42.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "electron": "44.8.0",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "8.3.4"
+  }
+}

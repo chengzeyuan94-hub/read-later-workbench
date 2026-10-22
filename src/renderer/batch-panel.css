@@ -1,0 +1,19 @@
+.batch-panel{border:2px solid var(--ink);border-radius:0;padding:20px;margin:0 0 24px;background:var(--paper)}
+.batch-panel h2{font-size:20px;margin:0 0 8px}.batch-panel h2 small{font-size:12px;font-weight:400;margin-left:12px}.batch-panel p,.batch-panel small{font-size:12px;color:var(--muted)}
+.batch-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.batch-actions{display:flex;gap:8px}.batch-platforms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.batch-platforms>div{display:flex;flex-direction:column;gap:6px}
+.batch-run{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}.batch-run summary{cursor:pointer;font-size:14px}.batch-run summary span{float:right}.batch-run-body{margin-top:12px}.batch-items{list-style:none;margin:8px 0 0;padding:0;max-height:360px;overflow:auto}.batch-items li{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:12px}.batch-items li>button:first-child{flex:1;min-width:180px;text-align:left}.batch-items small{flex-basis:100%}
+.batch-select{display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:12px;cursor:pointer}.batch-select input{accent-color:var(--orange);width:16px;height:16px}
+@media(max-width:800px){.batch-platforms{grid-template-columns:1fr}}
+.queue-drawer .batch-panel{border:0;padding:0;margin:0;background:transparent}
+.digest-queue{margin-bottom:18px}.digest-queue-summary{font-size:13px;font-weight:600;margin:0 0 10px}
+.digest-queue-items{list-style:none;margin:0;padding:0;max-height:50vh;overflow:auto}
+.digest-queue-items li{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-top:1px solid var(--line);font-size:12px}
+.digest-queue-main{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.digest-queue-main>button{flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.digest-queue-stage{flex-shrink:0;font-weight:600}
+.digest-queue-items li[data-kind='failed'] .digest-queue-stage{color:var(--danger,#B3261E)}
+.digest-queue-items li[data-kind='waiting'] .digest-queue-stage{color:var(--muted)}
+.digest-queue-items small{color:var(--muted)}
+.digest-queue-reason{color:var(--ink)}
+.digest-queue-items li[data-kind='failed'] .digest-queue-reason{color:var(--danger,#B3261E)}
+.digest-queue-items .btn{align-self:flex-start}
