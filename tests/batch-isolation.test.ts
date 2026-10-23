@@ -55,6 +55,7 @@ test('online snapshot retains actual records, manual versions and independent fi
  await assert.rejects(cloneBatch(f),/全新/);
  const markerFile=path.join(f.target,'batch-isolated.json'),marker=JSON.parse(readFileSync(markerFile,'utf8'));marker.runtimeSources={sourceUserDataDir:f.sourceUserDataDir,credentialUserDataDirs:f.runtimeSources.credentialUserDataDirs};writeFileSync(markerFile,JSON.stringify(marker));const legacy=resolveBatchPaths(f.target,{projectRoot:f.projectRoot,mustExist:true});assert.equal(legacy.sourceSessionDataDir,p.userDataDir);assert.equal(existsSync(f.sourceUserDataDir),false,'legacy source profile is never opened or created');
 });
-test('linked resources cannot publish a launchable clone',async()=>{
- const f=fixture('linked');symlinkSync(path.join(f.p.assetsDir,'human.bin'),path.join(f.p.dataDir,'media/link.bin'));await assert.rejects(cloneBatch(f),/链接/);assert.equal(existsSync(path.join(f.target,'batch-isolated.json')),false);
+test('linked resources cannot publish a launchable clone',async(t)=>{
+ const f=fixture('linked');try{symlinkSync(path.join(f.p.assetsDir,'human.bin'),path.join(f.p.dataDir,'media/link.bin'));}catch(error){if(process.platform==='win32'&&(error as NodeJS.ErrnoException).code==='EPERM'){t.diagnostic('file links need Developer Mode or admin on Windows; the rejection path is covered elsewhere');return;}throw error;}
+ await assert.rejects(cloneBatch(f),/链接/);assert.equal(existsSync(path.join(f.target,'batch-isolated.json')),false);
 });

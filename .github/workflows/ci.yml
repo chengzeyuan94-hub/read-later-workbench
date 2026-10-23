@@ -30,6 +30,10 @@ jobs:
       - name: native:verify (node + electron sqlite bindings)
         run: xvfb-run -a npm run native:verify
         if: runner.os == 'Linux'
+        env:
+          # CI containers lack the setuid sandbox helper; the app itself keeps
+          # default sandbox settings — this only affects the verify probe.
+          ELECTRON_DISABLE_SANDBOX: '1'
       - name: native:verify (node + electron sqlite bindings)
         run: npm run native:verify
         if: runner.os != 'Linux'

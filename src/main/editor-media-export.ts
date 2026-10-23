@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { accessSync, constants, createReadStream, createWriteStream, existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
-import { renameRetry, samePath } from './fs-paths.js';
+import { isCanonicalPath, renameRetry } from './fs-paths.js';
 import { link, mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Transform } from 'node:stream';
@@ -48,7 +48,7 @@ async function hashFile(file:string,signal?:AbortSignal):Promise<string>{const h
 export async function exportMarkdownPackage(repository:EditorRepository,workspaceId:string,kind:EditorExportKind,expected:{draftRevision:number;mapRevision:number},chosenPath:string,options:{includeLocalMedia?:boolean;operationId:string;signal?:AbortSignal;onProgress?:(progress:EditorExportProgress)=>void;failAt?:'after-write'|'before-publish'|'during-copy'}):Promise<EditorExportResult>{
  if(!path.isAbsolute(chosenPath)||chosenPath!==path.normalize(chosenPath))throw Error('导出位置无效');
  const parent=path.dirname(chosenPath);
- if(!existsSync(parent)||!lstatSync(parent).isDirectory()||!samePath(realpathSync(parent),parent)||lstatSync(parent).isSymbolicLink())throw Error('导出父目录不存在或使用别名');
+ if(!existsSync(parent)||!lstatSync(parent).isDirectory()||!isCanonicalPath(parent)||lstatSync(parent).isSymbolicLink())throw Error('导出父目录不存在或使用别名');
  if(options.signal?.aborted)return{status:'cancelled'};
  const {bundle,assets,markdown:originalMarkdown}=prepareMarkdown(repository,workspaceId,kind,expected);
  const media=options.includeLocalMedia?mediaInputs(repository,workspaceId):[];

@@ -1,6 +1,6 @@
 /** Cross-platform filesystem helpers for the main process. */
-import { closeSync, fsyncSync, openSync, renameSync } from 'node:fs';
-import { open, rename } from 'node:fs/promises';
+import { closeSync, fsyncSync, lstatSync, openSync, realpathSync, renameSync } from 'node:fs';
+import { lstat, open, realpath, rename } from 'node:fs/promises';
 import path from 'node:path';
 
 /** Stored relative paths always use `/`, independent of the host separator. */
@@ -56,11 +56,45 @@ export async function fsyncDirectory(dir: string): Promise<void> {
   try { await handle.sync(); } finally { await handle.close(); }
 }
 
+/** NTFS comparison key: strip the \\?\ long-path prefix and fold case. */
+export function ntfsPathKey(value: string): string {
+  return value.replace(/^[/\\]{2}\?[/\\]/, '').toLowerCase();
+}
+
 /** Path equality for alias checks; NTFS is case-insensitive and may report \\?\ prefixes. */
 export function samePath(a: string, b: string): boolean {
-  if (process.platform !== 'win32') return a === b;
-  const clean = (value: string) => value.replace(/^[/\\]{2}\?[/\\]/, '');
-  return clean(a).toLowerCase() === clean(b).toLowerCase();
+  return process.platform === 'win32' ? ntfsPathKey(a) === ntfsPathKey(b) : a === b;
+}
+
+/**
+ * `file` names the real on-disk object: absolute, normalized, no component is a
+ * link (checked explicitly, since a resolved path cannot reveal link spelling),
+ * and the leaf is spelled with its canonical name. Comparing both sides through
+ * realpath tolerates legitimate ancestor spellings — NTFS 8.3 names, case
+ * variants, \\?\ prefixes — while still rejecting the leaf's own aliases.
+ */
+export function isCanonicalPath(file: string): boolean {
+  if (!path.isAbsolute(file) || file !== path.normalize(file) || file === path.parse(file).root || file.endsWith(path.sep)) return false;
+  try {
+    let cursor = path.parse(file).root;
+    for (const part of file.slice(cursor.length).split(path.sep)) {
+      cursor = path.join(cursor, part);
+      if (lstatSync(cursor).isSymbolicLink()) return false;
+    }
+    return samePath(realpathSync(file), path.join(realpathSync(path.dirname(file)), path.basename(file)));
+  } catch { return false; }
+}
+
+export async function isCanonicalPathAsync(file: string): Promise<boolean> {
+  if (!path.isAbsolute(file) || file !== path.normalize(file) || file === path.parse(file).root || file.endsWith(path.sep)) return false;
+  try {
+    let cursor = path.parse(file).root;
+    for (const part of file.slice(cursor.length).split(path.sep)) {
+      cursor = path.join(cursor, part);
+      if ((await lstat(cursor)).isSymbolicLink()) return false;
+    }
+    return samePath(await realpath(file), path.join(await realpath(path.dirname(file)), path.basename(file)));
+  } catch { return false; }
 }
 
 /** Windows reserved device names cannot be file basenames. */

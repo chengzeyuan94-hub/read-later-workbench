@@ -36,7 +36,7 @@ test('encrypted provider files are independent and retain the legacy SiliconFlow
  storeProviderCredential(root, 'deepseek', 'unit-ds-second', encryption);
  assert.deepEqual(readFileSync(sf), before);
  assert.equal(readProviderCredential(root, 'deepseek', {}, encryption), 'unit-ds-second');
- for (const profile of Object.values(CREDENTIAL_PROFILES)) assert.equal(statSync(path.join(root, profile.filename)).mode & 0o777, 0o600);
+ if (process.platform !== 'win32') for (const profile of Object.values(CREDENTIAL_PROFILES)) assert.equal(statSync(path.join(root, profile.filename)).mode & 0o777, 0o600); // NTFS has no POSIX mode bits
 });
 
 test('invalid, damaged, symlinked and unavailable provider credentials do not expose or borrow another key', () => {

@@ -2,7 +2,7 @@ import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, 
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { samePath, toStoredPath } from './fs-paths.js';
+import { isCanonicalPath, toStoredPath } from './fs-paths.js';
 import type { E1Paths } from './e1-isolation.js';
 
 export const BATCH_LOGIN_PLATFORMS = ['xiaohongshu','bilibili','weibo','zhihu','twitter'] as const;
@@ -22,7 +22,7 @@ export function assertBatchOrdinaryPath(file: string): void {
   if (!path.isAbsolute(file) || path.normalize(file) !== file || file.endsWith(path.sep)) throw Error('批量运行需要规范绝对路径');
   let current = path.parse(file).root;
   for (const part of file.slice(current.length).split(path.sep)) { current = path.join(current, part); if (entry(current)?.isSymbolicLink()) throw Error('批量运行拒绝符号链接'); }
-  if (entry(file) && !samePath(realpathSync(file), file)) throw Error('批量运行拒绝路径别名');
+  if (entry(file) && !isCanonicalPath(file)) throw Error('批量运行拒绝路径别名');
 }
 export function batchBuildMode(buildRoot: string, environment: Record<string, string | undefined>): boolean {
   if (/^batch-e42-[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(path.basename(buildRoot))) {
@@ -74,13 +74,17 @@ export function createBatchPaths(value: string | undefined, options: { projectRo
 }
 /** Inspect only this run's session root, including default-session files and all five partitions. */
 export function batchSourceHolders(partitions: BatchPaths['sourcePartitions']): number[] {
-  if (process.platform === 'win32') throw Error('平台会话独占检查依赖 lsof，仅支持 macOS/Linux 批量开发');
   const pids = new Set<number>();
   const roots = new Set(Object.values(partitions).map(directory => path.dirname(path.dirname(directory))));
   if (roots.size !== 1) throw Error('平台会话必须共享本轮独立存储根');
+  // Boundary validation precedes the POSIX-only holder probe so invalid roots
+  // are rejected with the right reason on every OS.
   for (const directory of roots) {
     assertBatchOrdinaryPath(directory);
     if (!/[\\/]\.acceptance-data[\\/]batch-sync[\\/]e42-[-a-zA-Z0-9_]+[\\/]userData$/.test(directory)) throw Error('平台会话独占检查拒绝旧或正式目录');
+  }
+  if (process.platform === 'win32') throw Error('平台会话独占检查依赖 lsof，仅支持 macOS/Linux 批量开发');
+  for (const directory of roots) {
     let output = '';
     try { output = execFileSync('/usr/sbin/lsof', ['-nP','-t','+D',directory], { encoding: 'utf8', stdio: ['ignore','pipe','pipe'], timeout: 30_000 }); }
     catch (error) { const result = error as { status?: number; stdout?: Buffer | string; stderr?: Buffer | string }; if (result.status !== 1 || String(result.stderr ?? '').trim()) throw Error('无法确认本轮平台会话的独占状态，未打开会话'); output = String(result.stdout ?? ''); }

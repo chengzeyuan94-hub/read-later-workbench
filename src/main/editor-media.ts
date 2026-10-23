@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { renameSyncRetry, samePath } from './fs-paths.js';
+import { isCanonicalPath, renameSyncRetry } from './fs-paths.js';
 import path from 'node:path';
 import type { AssetMetadata } from '../editor-core/model.js';
 export function sha256(bytes: Uint8Array | string): string { return createHash('sha256').update(bytes).digest('hex'); }
@@ -16,7 +16,7 @@ finally {
 export function boundedFile(root: string, relative: string): string {
     if (!relative || path.isAbsolute(relative) || relative.split(/[\\/]/).some(x => !x || x === '.' || x === '..'))
         throw new Error('本地资源路径无效');
-    if(lstatSync(root).isSymbolicLink()||!samePath(realpathSync(root), path.resolve(root)))throw new Error('本地资源根目录不能使用符号链接或别名');
+    if(lstatSync(root).isSymbolicLink()||!isCanonicalPath(path.resolve(root)))throw new Error('本地资源根目录不能使用符号链接或别名');
     const base = realpathSync(root), candidate = path.resolve(base, relative);
     if (!candidate.startsWith(base + path.sep))
         throw new Error('本地资源超出允许目录');
@@ -26,7 +26,7 @@ export function boundedFile(root: string, relative: string): string {
         if (lstatSync(current).isSymbolicLink())
             throw new Error('本地资源不能使用符号链接');
     }
-    if (!samePath(realpathSync(candidate), candidate) || !statSync(candidate).isFile())
+    if (!isCanonicalPath(candidate) || !statSync(candidate).isFile())
         throw new Error('本地资源不可用');
     return candidate;
 }

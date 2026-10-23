@@ -1,6 +1,6 @@
 import { lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
-import { samePath } from './fs-paths.js';
+import { isCanonicalPath } from './fs-paths.js';
 import type { E1Paths } from './e1-isolation.js';
 /** A compiled E111 entry must fail closed even when launched without its shell wrapper. */
 export function e111BuildMode(buildRoot:string,environment:Record<string,string|undefined>):boolean {
@@ -13,7 +13,7 @@ export function e111BuildMode(buildRoot:string,environment:Record<string,string|
   return false;
 }
 const entry = (file:string) => { try { return lstatSync(file); } catch(error) { if((error as NodeJS.ErrnoException).code==='ENOENT')return;throw error; } };
-function canonical(file:string):void { let current=path.parse(file).root;for(const part of file.slice(current.length).split(path.sep)){current=path.join(current,part);if(entry(current)?.isSymbolicLink())throw new Error('E1.1.1拒绝符号链接');}if(entry(file)&&!samePath(realpathSync(file), file))throw new Error('E1.1.1拒绝路径别名'); }
+function canonical(file:string):void { let current=path.parse(file).root;for(const part of file.slice(current.length).split(path.sep)){current=path.join(current,part);if(entry(current)?.isSymbolicLink())throw new Error('E1.1.1拒绝符号链接');}if(entry(file)&&!isCanonicalPath(file))throw new Error('E1.1.1拒绝路径别名'); }
 /** E111 never aliases a formal, E1, or sealed E11 profile. */
 export function resolveE111Paths(value:string|undefined,options:{mustExist?:boolean;projectRoot?:string}={}):E1Paths {
   const allowed=path.resolve(options.projectRoot??process.cwd(),'.acceptance-data/editor-e111');

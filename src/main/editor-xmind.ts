@@ -7,7 +7,7 @@ import { clone, plainText, pointSlice, referenceDescription, transcriptTimeDescr
 import type { EditorExportResult } from '../shared/editor-contracts.js';
 import type { EditorRepository } from './editor-store.js';
 import { exportFilename } from './editor-export.js';
-import { fsyncDirectory, samePath } from './fs-paths.js';
+import { fsyncDirectory, isCanonicalPathAsync } from './fs-paths.js';
 import { boundedFile, imageInfo, readFixedAsset, sha256 } from './editor-media.js';
 import { prepareXmindImage, type XmindWebpDecoder } from './editor-xmind-image.js';
 
@@ -54,7 +54,7 @@ function sourceNote(ref: SourceReference, resolved: ResolvedReference, bundle: W
   const links = sourceLinks(ref, bundle);
   return `${label}${region}\n摘录：${excerpt}${suffix}${links.length ? '\n原收藏网页：' + links.join('\n') : ''}`;
 }
-async function exactDirectory(directory: string): Promise<void> { if (!path.isAbsolute(directory) || directory !== path.normalize(directory) || !samePath(await realpath(directory), directory) || !(await lstat(directory)).isDirectory()) throw new Error('导出父目录不存在或使用路径别名'); }
+async function exactDirectory(directory: string): Promise<void> { if (!(await isCanonicalPathAsync(directory)) || !(await lstat(directory)).isDirectory()) throw new Error('导出父目录不存在或使用路径别名'); }
 /** Exports the exact selected, already saved map. Failure never changes a prior user file. */
 export async function exportEditorXmind(repository: EditorRepository, workspaceId: string, expected: { draftRevision: number; mapRevision: number }, chosenPath: string, options: { failAt?: 'after-write' | 'before-publish'; decodeWebp?: XmindWebpDecoder } = {}): Promise<EditorExportResult> {
   if (!path.isAbsolute(chosenPath) || chosenPath !== path.normalize(chosenPath) || /[\0\r\n]/.test(chosenPath)) throw new Error('导图导出位置无效');

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, constants } from 'node:fs';
-import { fsyncDirectory, fsyncFile, renameRetry, samePath } from './fs-paths.js';
+import { fsyncDirectory, fsyncFile, isCanonicalPathAsync, renameRetry } from './fs-paths.js';
 import { resolveMediaTool } from './media-tools.js';
 import { access, lstat, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -86,7 +86,7 @@ function mediaError(error: unknown): AsrMediaError {
 async function localFile(file: string): Promise<string> {
   if (!path.isAbsolute(file) || file !== path.normalize(file) || /[\0\r\n]/.test(file)) throw new AsrMediaError('file-unavailable');
   const info = await lstat(file);
-  if (!info.isFile() || info.isSymbolicLink() || !samePath(await realpath(file), file)) throw new AsrMediaError('file-unavailable');
+  if (!info.isFile() || info.isSymbolicLink() || !(await isCanonicalPathAsync(file))) throw new AsrMediaError('file-unavailable');
   // Mode checks remain meaningful when a development process has elevated privileges.
   if (!(info.mode & 0o444)) throw new AsrMediaError('permission-denied');
   await access(file, constants.R_OK);
@@ -230,7 +230,7 @@ async function outputDirectory(dir: string): Promise<string> {
     try { const info = await lstat(cursor); if (!info.isDirectory() || info.isSymbolicLink()) throw new AsrMediaError('permission-denied'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; await mkdir(cursor, { mode: 0o700 }); }
   }
-  if (!samePath(await realpath(dir), dir) || !((await stat(dir)).mode & 0o222)) throw new AsrMediaError('permission-denied');
+  if (!(await isCanonicalPathAsync(dir)) || !((await stat(dir)).mode & 0o222)) throw new AsrMediaError('permission-denied');
   return dir;
 }
 function validateProbe(probe: AsrMediaProbe, config: AsrPreparationConfig): void {
@@ -252,7 +252,7 @@ export async function prepareMediaChunks(input: { probe: AsrMediaProbe; outputDi
     const configSha256 = asrPreparationConfigSha256(config, probe.toolVersions), identity = hash(JSON.stringify({ originalSha256: probe.sha256, originalBytes: probe.bytes, audioTrackIndex: probe.audioTrackIndex, audioStartMs: probe.audioStartMs, configSha256 }));
     const outputDir = await outputDirectory(input.outputDir), published = path.join(outputDir, `prepared-${identity}`);
     try {
-      if ((await lstat(published)).isSymbolicLink() || !samePath(await realpath(published), published)) throw new AsrMediaError('input-mismatch');
+      if ((await lstat(published)).isSymbolicLink() || !(await isCanonicalPathAsync(published))) throw new AsrMediaError('input-mismatch');
       const manifestPath = await localFile(path.join(published, 'manifest.json'));
       if ((await stat(manifestPath)).size > 1024 ** 2) throw new AsrMediaError('input-mismatch');
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));

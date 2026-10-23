@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { joinStored, renameSyncRetry, safeFilename, toStoredPath } from '../src/main/fs-paths.js';
+import { isCanonicalPath, joinStored, ntfsPathKey, renameSyncRetry, safeFilename, samePath, toStoredPath } from '../src/main/fs-paths.js';
 import { exportFilename } from '../src/main/editor-export.js';
 import { boundedFile } from '../src/main/editor-media.js';
 
@@ -65,5 +65,36 @@ test('renameSyncRetry propagates a permanent failure after retrying', () => {
   assert.throws(() => renameSyncRetry(missing, target), /ENOENT/);
   assert.ok(Date.now() - started < 2000, 'permanent ENOENT must not retry for the full window');
   assert.equal(statSync(target).size, 3);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('ntfsPathKey covers the \\?\\ prefix and case folding that samePath relies on', () => {
+  // NTFS semantics written as win32 strings so the contract is pinned on every OS.
+  assert.equal(ntfsPathKey('\\\\?\\C:\\Users\\Runner~1\\App'), 'c:\\users\\runner~1\\app');
+  assert.equal(ntfsPathKey('C:\\Users\\RunnerAdmin'), 'c:\\users\\runneradmin');
+  assert.equal(ntfsPathKey('\\\\server\\share\\Dir'), '\\\\server\\share\\dir');
+});
+
+test('isCanonicalPath accepts real directories, tolerates NTFS-style spelling only through samePath, and rejects link ancestors', () => {
+  const root = tmp();
+  assert.equal(isCanonicalPath(root), true);
+  const nested = path.join(root, 'inner');
+  mkdirSync(nested);
+  assert.equal(isCanonicalPath(nested), true);
+  // The leaf must be spelled canonically even when ancestors use valid alternates.
+  assert.equal(isCanonicalPath(path.join(root, 'missing')), false);
+  assert.equal(isCanonicalPath(`${nested}${path.sep}..${path.sep}inner`), false); // non-normalized
+  assert.equal(isCanonicalPath(`${nested}${path.sep}`), false); // trailing separator
+  assert.equal(isCanonicalPath('relative/path'), false);
+    // Junctions work unprivileged on win32; skip silently if links are impossible.
+    const target = path.join(root, 'real'), alias = path.join(root, 'alias');
+    mkdirSync(target);
+    try {
+      symlinkSync(target, alias, process.platform === 'win32' ? 'junction' : undefined);
+      assert.equal(isCanonicalPath(alias), false);
+      assert.equal(isCanonicalPath(path.join(alias, 'inner')), false);
+    } catch (error) {
+      assert.equal((error as NodeJS.ErrnoException).code, 'EPERM');
+    }
   rmSync(root, { recursive: true, force: true });
 });
