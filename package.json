@@ -21,7 +21,7 @@
     "build": "npm run typecheck && vite build && tsc -p tsconfig.main.json && node scripts/build-preload.mjs",
     "start": "electron .",
     "dev": "npm run build && electron .",
-    "test": "node --import tsx --test \"tests/*.test.ts\"",
+    "test": "node --import tsx --test --test-timeout=120000 \"tests/*.test.ts\"",
     "native:prepare": "node scripts/native.mjs",
     "native:verify": "node scripts/sqlite-probe.cjs && electron scripts/sqlite-probe.cjs",
     "fixture:prepare": "node --import tsx scripts/prepare-fixture.ts",
