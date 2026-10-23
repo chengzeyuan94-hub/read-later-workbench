@@ -42,7 +42,7 @@ export function storeProviderCredential(userDataDir: string, provider: Credentia
   if (!valid(key)) throw Error('密钥格式不正确，未保存');
   if (!encryption.isEncryptionAvailable()) throw Error('安全凭据存储不可用，现有配置保持');
   const encrypted = encryption.encryptString(key), file = path.join(userDataDir, CREDENTIAL_PROFILES[provider].filename), temporary = file + '.tmp-' + randomUUID();
-  writeFileSync(temporary, encrypted, { flag: 'wx', mode: 0o600 });
-  const fd = openSync(temporary, 'r'); try { fsyncSync(fd); } finally { closeSync(fd); }
+  const fd = openSync(temporary, 'wx', 0o600);
+  try { writeFileSync(fd, encrypted); fsyncSync(fd); } finally { closeSync(fd); }
   renameSyncRetry(temporary, file);
 }

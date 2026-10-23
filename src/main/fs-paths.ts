@@ -1,6 +1,6 @@
 /** Cross-platform filesystem helpers for the main process. */
-import { renameSync } from 'node:fs';
-import { rename } from 'node:fs/promises';
+import { closeSync, fsyncSync, openSync, renameSync } from 'node:fs';
+import { open, rename } from 'node:fs/promises';
 import path from 'node:path';
 
 /** Stored relative paths always use `/`, independent of the host separator. */
@@ -31,6 +31,37 @@ export async function renameRetry(source: string, target: string, attempts = 8):
 }
 
 function busyWait(ms: number): void { const end = Date.now() + ms; while (Date.now() < end) { /* bounded spin for sync callers */ } }
+
+/**
+ * Durability helpers. Windows denies FlushFileBuffers on handles opened
+ * read-only and cannot open directories for fsync at all: files are opened
+ * for update, and directory fsync is a no-op (NTFS commits renames itself).
+ */
+export function fsyncFileSync(file: string): void {
+  const fd = openSync(file, process.platform === 'win32' ? 'r+' : 'r');
+  try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+export function fsyncDirectorySync(dir: string): void {
+  if (process.platform === 'win32') return;
+  const fd = openSync(dir, 'r');
+  try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+export async function fsyncFile(file: string): Promise<void> {
+  const handle = await open(file, process.platform === 'win32' ? 'r+' : 'r');
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+export async function fsyncDirectory(dir: string): Promise<void> {
+  if (process.platform === 'win32') return;
+  const handle = await open(dir, 'r');
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+
+/** Path equality for alias checks; NTFS is case-insensitive and may report \\?\ prefixes. */
+export function samePath(a: string, b: string): boolean {
+  if (process.platform !== 'win32') return a === b;
+  const clean = (value: string) => value.replace(/^[/\\]{2}\?[/\\]/, '');
+  return clean(a).toLowerCase() === clean(b).toLowerCase();
+}
 
 /** Windows reserved device names cannot be file basenames. */
 const RESERVED_BASENAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;

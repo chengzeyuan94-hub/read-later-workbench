@@ -2,6 +2,7 @@ import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, 
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { samePath, toStoredPath } from './fs-paths.js';
 import type { E1Paths } from './e1-isolation.js';
 
 export const BATCH_LOGIN_PLATFORMS = ['xiaohongshu','bilibili','weibo','zhihu','twitter'] as const;
@@ -21,7 +22,7 @@ export function assertBatchOrdinaryPath(file: string): void {
   if (!path.isAbsolute(file) || path.normalize(file) !== file || file.endsWith(path.sep)) throw Error('批量运行需要规范绝对路径');
   let current = path.parse(file).root;
   for (const part of file.slice(current.length).split(path.sep)) { current = path.join(current, part); if (entry(current)?.isSymbolicLink()) throw Error('批量运行拒绝符号链接'); }
-  if (entry(file) && realpathSync(file) !== file) throw Error('批量运行拒绝路径别名');
+  if (entry(file) && !samePath(realpathSync(file), file)) throw Error('批量运行拒绝路径别名');
 }
 export function batchBuildMode(buildRoot: string, environment: Record<string, string | undefined>): boolean {
   if (/^batch-e42-[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(path.basename(buildRoot))) {
@@ -35,13 +36,13 @@ export function batchBuildMode(buildRoot: string, environment: Record<string, st
 /** Credentials are referenced by directory only. Platform profiles are always new-root local. */
 export function validateBatchRuntimeSources(value: BatchRuntimeSources, projectRoot: string, newUserDataDir: string): Pick<BatchPaths, 'sourceSessionDataDir' | 'sourcePartitions' | 'credentialUserDataDirs'> {
   assertBatchOrdinaryPath(newUserDataDir);
-  const localRelative = path.relative(path.resolve(projectRoot, '.acceptance-data/batch-sync'), newUserDataDir);
+  const localRelative = toStoredPath(path.relative(path.resolve(projectRoot, '.acceptance-data/batch-sync'), newUserDataDir));
   if (!/^e42-[-a-zA-Z0-9_]+\/userData$/.test(localRelative)) throw Error('平台登录会话必须位于本轮独立资料根');
   const sourcePartitions = Object.fromEntries(BATCH_LOGIN_PLATFORMS.map(platform => [platform,path.join(newUserDataDir,`Partitions/rlw-${platform}`)])) as BatchPaths['sourcePartitions'];
   for (const directory of Object.values(sourcePartitions)) assertBatchOrdinaryPath(directory);
   for (const directory of Object.values(value.credentialUserDataDirs)) {
     assertBatchOrdinaryPath(directory);
-    const relative = path.relative(path.resolve(projectRoot, '.acceptance-data'), directory);
+    const relative = toStoredPath(path.relative(path.resolve(projectRoot, '.acceptance-data'), directory));
     if (!/^(editor-e2|editor-e3|editor-e3-fix|editor-e3-real)\/[-a-zA-Z0-9_]+\/userData$/.test(relative) || !entry(directory)?.isDirectory()) throw Error('处理凭据来源必须是明确的既有安全配置目录');
   }
   return { sourceSessionDataDir: newUserDataDir, sourcePartitions, credentialUserDataDirs: value.credentialUserDataDirs };
@@ -73,6 +74,7 @@ export function createBatchPaths(value: string | undefined, options: { projectRo
 }
 /** Inspect only this run's session root, including default-session files and all five partitions. */
 export function batchSourceHolders(partitions: BatchPaths['sourcePartitions']): number[] {
+  if (process.platform === 'win32') throw Error('平台会话独占检查依赖 lsof，仅支持 macOS/Linux 批量开发');
   const pids = new Set<number>();
   const roots = new Set(Object.values(partitions).map(directory => path.dirname(path.dirname(directory))));
   if (roots.size !== 1) throw Error('平台会话必须共享本轮独立存储根');

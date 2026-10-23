@@ -1,5 +1,6 @@
 import { existsSync, linkSync, lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { samePath } from './fs-paths.js';
 import { randomUUID } from 'node:crypto';
 import { plainText, validateTranscript } from '../editor-core/model.js';
 import type { AsrContentState, AsrDocument, AsrExportResult, AsrExportSelection } from '../shared/asr-contracts.js';
@@ -10,7 +11,7 @@ function sourceUrl(value: string): string { const url = new URL(value); if (!['h
 /** Export only immutable, explicitly selected saved text versions. It never prepares or uploads media. */
 export function exportAsrMarkdown(repository: ExportRepository, contentId: number, selection: AsrExportSelection[], chosenPath: string, options: { failAt?: 'after-write' | 'before-publish' } = {}): AsrExportResult {
   if (!Number.isSafeInteger(contentId) || contentId < 1 || !Array.isArray(selection) || !selection.length || selection.length > 1000 || !path.isAbsolute(chosenPath) || chosenPath !== path.normalize(chosenPath)) throw new Error('转录导出范围或位置无效');
-  const parent = path.dirname(chosenPath); if (!existsSync(parent) || realpathSync(parent) !== parent || lstatSync(parent).isSymbolicLink()) throw new Error('导出父目录不存在或使用别名');
+  const parent = path.dirname(chosenPath); if (!existsSync(parent) || !samePath(realpathSync(parent), parent) || lstatSync(parent).isSymbolicLink()) throw new Error('导出父目录不存在或使用别名');
   const seen = new Set<string>(), documents: AsrDocument[] = [];
   for (const item of selection) {
     if (!item || Object.keys(item).some(key => !['resultId', 'version'].includes(key)) || !item.version || Object.keys(item.version).some(key => !['kind', 'revision'].includes(key)) || !['original', 'correction'].includes(item.version.kind) || !Number.isSafeInteger(item.version.revision) || item.version.kind === 'original' && item.version.revision !== 1 || item.version.kind === 'correction' && item.version.revision < 2) throw new Error('导出需要确切已保存的转录版本');
