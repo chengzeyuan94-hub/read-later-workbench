@@ -1,15 +1,14 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream, constants, existsSync } from 'node:fs';
-import { access, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createReadStream, constants } from 'node:fs';
+import { fsyncDirectory, fsyncFile, isCanonicalPathAsync, renameRetry } from './fs-paths.js';
+import { resolveMediaTool } from './media-tools.js';
+import { access, lstat, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-/** E2 uses local tools already installed by the user; it never installs or downloads a tool. */
-const repoTool = (name: string) => path.resolve('.runtime/qa/package', name);
-const defaultTool = (envValue: string | undefined, name: string) =>
-  envValue || (existsSync(repoTool(name)) ? repoTool(name) : name);
-export const DEFAULT_FFMPEG_PATH = defaultTool(process.env.RLW_FFMPEG, 'ffmpeg');
-export const DEFAULT_FFPROBE_PATH = defaultTool(process.env.RLW_FFPROBE, 'ffprobe');
+/** Local tools only: env override → bundled installer → repo QA package → PATH; never downloads. */
+export const DEFAULT_FFMPEG_PATH = resolveMediaTool('ffmpeg', process.env.RLW_FFMPEG);
+export const DEFAULT_FFPROBE_PATH = resolveMediaTool('ffprobe', process.env.RLW_FFPROBE);
 export interface AsrPreparationConfig {
   version: 'pcm16-mono-16k-contiguous-v1';
   sampleRate: 16000;
@@ -87,7 +86,7 @@ function mediaError(error: unknown): AsrMediaError {
 async function localFile(file: string): Promise<string> {
   if (!path.isAbsolute(file) || file !== path.normalize(file) || /[\0\r\n]/.test(file)) throw new AsrMediaError('file-unavailable');
   const info = await lstat(file);
-  if (!info.isFile() || info.isSymbolicLink() || await realpath(file) !== file) throw new AsrMediaError('file-unavailable');
+  if (!info.isFile() || info.isSymbolicLink() || !(await isCanonicalPathAsync(file))) throw new AsrMediaError('file-unavailable');
   // Mode checks remain meaningful when a development process has elevated privileges.
   if (!(info.mode & 0o444)) throw new AsrMediaError('permission-denied');
   await access(file, constants.R_OK);
@@ -108,7 +107,7 @@ export function runAsrProcess(file: string, args: string[], options: { signal?: 
   return new Promise((resolve, reject) => {
     let settled = false, error: unknown, total = 0, checking = false;
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
-    const child = spawn(file, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], ...(options.cwd ? { cwd: options.cwd } : {}), env: { PATH: '/usr/bin:/bin', LC_ALL: 'C' } });
+    const child = spawn(file, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], ...(options.cwd ? { cwd: options.cwd } : {}), env: process.platform === 'win32' ? { PATH: process.env.PATH ?? '', SystemRoot: process.env.SystemRoot, LC_ALL: 'C' } : { PATH: '/usr/bin:/bin', LC_ALL: 'C' } });
     let hard: ReturnType<typeof setTimeout> | undefined;
     const terminate = (reason: AsrMediaError) => { if (!error) error = reason; child.kill('SIGTERM'); if (!hard) { hard = setTimeout(() => child.kill('SIGKILL'), 500); hard.unref(); } };
     const abort = () => terminate(new AsrMediaError('cancelled'));
@@ -223,15 +222,15 @@ export function isAsrPreparationNamespacePath(dir: string): boolean {
 }
 async function outputDirectory(dir: string): Promise<string> {
   if (!isAsrPreparationNamespacePath(dir)) throw new AsrMediaError('permission-denied');
-  const parts = dir.split(path.sep);
+  const root = path.parse(dir).root;
   // Check each ancestor before creating anything, preventing writes through a link.
-  let cursor = path.parse(dir).root;
-  for (const part of parts.filter(Boolean)) {
+  let cursor = root;
+  for (const part of dir.slice(root.length).split(path.sep)) {
     cursor = path.join(cursor, part);
     try { const info = await lstat(cursor); if (!info.isDirectory() || info.isSymbolicLink()) throw new AsrMediaError('permission-denied'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; await mkdir(cursor, { mode: 0o700 }); }
   }
-  if (await realpath(dir) !== dir || !((await stat(dir)).mode & 0o222)) throw new AsrMediaError('permission-denied');
+  if (!(await isCanonicalPathAsync(dir)) || !((await stat(dir)).mode & 0o222)) throw new AsrMediaError('permission-denied');
   return dir;
 }
 function validateProbe(probe: AsrMediaProbe, config: AsrPreparationConfig): void {
@@ -240,8 +239,8 @@ function validateProbe(probe: AsrMediaProbe, config: AsrPreparationConfig): void
     !Number.isFinite(probe.durationMs) || probe.durationMs <= 0 || probe.durationMs > config.maxDurationMs || !probe.toolVersions ||
     typeof probe.toolVersions.ffmpeg !== 'string' || typeof probe.toolVersions.ffprobe !== 'string') throw new AsrMediaError('input-mismatch');
 }
-async function syncFile(file: string): Promise<void> { const fd = await open(file, 'r+'); try { await fd.sync(); } finally { await fd.close(); } }
-async function syncDirectory(dir: string): Promise<void> { const fd = await open(dir, 'r'); try { await fd.sync(); } finally { await fd.close(); } }
+async function syncFile(file: string): Promise<void> { await fsyncFile(file); }
+async function syncDirectory(dir: string): Promise<void> { await fsyncDirectory(dir); }
 export async function prepareMediaChunks(input: { probe: AsrMediaProbe; outputDir: string; config?: Readonly<AsrPreparationConfig>; signal?: AbortSignal }): Promise<PreparedAsrChunk[]> {
   let staging: string | undefined;
   try {
@@ -253,7 +252,7 @@ export async function prepareMediaChunks(input: { probe: AsrMediaProbe; outputDi
     const configSha256 = asrPreparationConfigSha256(config, probe.toolVersions), identity = hash(JSON.stringify({ originalSha256: probe.sha256, originalBytes: probe.bytes, audioTrackIndex: probe.audioTrackIndex, audioStartMs: probe.audioStartMs, configSha256 }));
     const outputDir = await outputDirectory(input.outputDir), published = path.join(outputDir, `prepared-${identity}`);
     try {
-      if ((await lstat(published)).isSymbolicLink() || await realpath(published) !== published) throw new AsrMediaError('input-mismatch');
+      if ((await lstat(published)).isSymbolicLink() || !(await isCanonicalPathAsync(published))) throw new AsrMediaError('input-mismatch');
       const manifestPath = await localFile(path.join(published, 'manifest.json'));
       if ((await stat(manifestPath)).size > 1024 ** 2) throw new AsrMediaError('input-mismatch');
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -296,7 +295,7 @@ export async function prepareMediaChunks(input: { probe: AsrMediaProbe; outputDi
     if ((await stat(probe.originalPath)).size !== probe.bytes || await asrFileSha256(probe.originalPath, input.signal) !== probe.sha256) throw new AsrMediaError('input-mismatch');
     const manifest = { schemaVersion: 1, identity, originalSha256: probe.sha256, configSha256, config, toolVersions: probe.toolVersions, containerDurationMs: probe.durationMs, actualDecodedDurationMs: totalFrames / 16, coverage: 'complete-decoded-audio-track', overlap: false, chunks: chunks.map(({ localPath, ...chunk }) => ({ ...chunk, file: path.basename(localPath) })) };
     await writeFile(path.join(staging, 'manifest.json'), JSON.stringify(manifest), { flag: 'wx', mode: 0o600 }); await syncFile(path.join(staging, 'manifest.json')); await syncDirectory(staging); checkAbort(input.signal);
-    await rename(staging, published); staging = undefined; await syncDirectory(outputDir);
+    await renameRetry(staging, published); staging = undefined; await syncDirectory(outputDir);
     return chunks;
   } catch (error) { checkAbort(input.signal); throw mediaError(error); }
   finally { if (staging) await rm(staging, { recursive: true, force: true }).catch(() => {}); }

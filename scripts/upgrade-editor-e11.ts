@@ -2,10 +2,11 @@
  * production upgrade entrypoint. Close the target E11 app before invoking it. */
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { closeSync, constants, copyFileSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createE11Paths, resolveE11Paths } from '../src/main/e11-isolation.js';
+import { fsyncDirectorySync, fsyncFileSync, isCanonicalPath } from '../src/main/fs-paths.js';
 import { migrateEditorSchema } from '../src/main/editor-store.js';
 import { boundedFile, sha256, sha256File } from '../src/main/editor-media.js';
 import { resourceSnapshot, tableSnapshot, treeFiles, type E11File, type E11Table } from './audit-editor-e11.js';
@@ -22,15 +23,15 @@ export interface E11UpgradeResult {
   existingTablesPreserved: true; originalResourcesPreserved: true; requestAndCallRowsPreserved: true;
   productionUpgrade: false;
 }
-function syncFile(file: string): void { const fd = openSync(file, 'r'); try { fsyncSync(fd); } finally { closeSync(fd); } }
-function syncDirectory(file: string): void { syncFile(file); }
+function syncFile(file: string): void { fsyncFileSync(file); }
+function syncDirectory(file: string): void { fsyncDirectorySync(file); }
 function writeJson(file: string, value: unknown): void { writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { flag: 'wx', mode: 0o600 }); syncFile(file); syncDirectory(path.dirname(file)); }
 function directoryList(root: string, prefix: string): string[] {
   if (!existsSync(root)) return [];
   const result = [prefix];
   for (const entry of readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
     const file = path.join(root, entry.name);
-    if (lstatSync(file).isSymbolicLink() || realpathSync(file) !== file) throw new Error('完整备份拒绝符号链接或路径别名');
+    if (lstatSync(file).isSymbolicLink() || !isCanonicalPath(file)) throw new Error('完整备份拒绝符号链接或路径别名');
     if (entry.isDirectory()) result.push(...directoryList(file, path.posix.join(prefix, entry.name)));
     else if (!entry.isFile()) throw new Error('完整备份拒绝非普通文件');
   }
@@ -49,7 +50,7 @@ function assertResourcesPreserved(before: E11File[], after: E11File[]): void {
 function validateBackup(backup: string): { manifest: BackupManifest; manifestSha256: string } {
   if (!path.isAbsolute(backup) || path.normalize(backup) !== backup || path.basename(path.dirname(backup)) !== 'upgrade-backups' || !/^upgrade-[0-9a-f-]+$/.test(path.basename(backup))) throw new Error('必须明确指定E11完整备份目录');
   const sourceRoot = path.dirname(path.dirname(backup)); resolveE11Paths(sourceRoot, { mustExist: true });
-  if (lstatSync(backup).isSymbolicLink() || realpathSync(backup) !== backup) throw new Error('完整备份目录不能使用符号链接或别名');
+  if (lstatSync(backup).isSymbolicLink() || !isCanonicalPath(backup)) throw new Error('完整备份目录不能使用符号链接或别名');
   const manifestFile = boundedFile(backup, 'manifest.json'), bytes = readFileSync(manifestFile), manifest = JSON.parse(bytes.toString('utf8')) as BackupManifest;
   if (manifest.kind !== 'editor-e11-complete-backup' || manifest.version !== 1 || manifest.sourceRoot !== sourceRoot || ![4, 6].includes(manifest.inputSchema) || manifest.targetSchema !== 7 || !manifest.databaseConsistentSnapshot || !Array.isArray(manifest.files) || !Array.isArray(manifest.directories)) throw new Error('完整备份清单无效');
   const actual = treeFiles(backup).filter(file => !['manifest.json', 'upgrade-result.json'].includes(file.path));
@@ -81,7 +82,7 @@ export async function upgradeE11(root: string, options: { failAfterSchema?: bool
     if (Number(db.pragma('user_version', { simple: true })) !== version) throw new Error('隔离库在检查后发生变化，请关闭应用再重试');
     const before = tableSnapshot(db), settings = settingsSnapshot(db), resources = resourceSnapshot(p.dataDir, p.assetsDir);
     const backups = path.join(p.root, 'upgrade-backups'); mkdirSync(backups, { recursive: true, mode: 0o700 });
-    if (lstatSync(backups).isSymbolicLink() || realpathSync(backups) !== backups) throw new Error('备份目录不能使用符号链接或别名');
+    if (lstatSync(backups).isSymbolicLink() || !isCanonicalPath(backups)) throw new Error('备份目录不能使用符号链接或别名');
     const backup = path.join(backups, `upgrade-${randomUUID()}`); mkdirSync(backup, { mode: 0o700 });
     const directories = [...directoryList(p.dataDir, 'data'), ...directoryList(p.assetsDir, 'editor-assets')].sort();
     for (const directory of directories) mkdirSync(path.join(backup, directory), { recursive: true, mode: 0o700 });

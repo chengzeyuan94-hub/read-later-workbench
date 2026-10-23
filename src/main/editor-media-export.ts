@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { accessSync, constants, createReadStream, createWriteStream, existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
-import { link, mkdir, mkdtemp, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { isCanonicalPath, renameRetry } from './fs-paths.js';
+import { link, mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -47,7 +48,7 @@ async function hashFile(file:string,signal?:AbortSignal):Promise<string>{const h
 export async function exportMarkdownPackage(repository:EditorRepository,workspaceId:string,kind:EditorExportKind,expected:{draftRevision:number;mapRevision:number},chosenPath:string,options:{includeLocalMedia?:boolean;operationId:string;signal?:AbortSignal;onProgress?:(progress:EditorExportProgress)=>void;failAt?:'after-write'|'before-publish'|'during-copy'}):Promise<EditorExportResult>{
  if(!path.isAbsolute(chosenPath)||chosenPath!==path.normalize(chosenPath))throw Error('导出位置无效');
  const parent=path.dirname(chosenPath);
- if(!existsSync(parent)||!lstatSync(parent).isDirectory()||realpathSync(parent)!==parent||lstatSync(parent).isSymbolicLink())throw Error('导出父目录不存在或使用别名');
+ if(!existsSync(parent)||!lstatSync(parent).isDirectory()||!isCanonicalPath(parent)||lstatSync(parent).isSymbolicLink())throw Error('导出父目录不存在或使用别名');
  if(options.signal?.aborted)return{status:'cancelled'};
  const {bundle,assets,markdown:originalMarkdown}=prepareMarkdown(repository,workspaceId,kind,expected);
  const media=options.includeLocalMedia?mediaInputs(repository,workspaceId):[];
@@ -95,7 +96,7 @@ export async function exportMarkdownPackage(repository:EditorRepository,workspac
    let reservation:string;
    for(;;){reservation=path.join(parent,`${base}-${randomUUID()}`);try{await mkdir(reservation,{mode:0o700});break;}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;}}
    target=path.join(reservation,base);
-   try{assertNotCancelled(options.signal);await rename(temp,target);}catch(e){await rm(reservation,{recursive:true,force:true});throw e;}
+   try{assertNotCancelled(options.signal);await renameRetry(temp,target);}catch(e){await rm(reservation,{recursive:true,force:true});throw e;}
   }else{
    target=path.join(parent,`${base}.md`);let n=1;
    for(;;){assertNotCancelled(options.signal);try{await link(path.join(temp,`${base}.md`),target);break;}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;target=path.join(parent,`${base} (${++n}).md`);}}

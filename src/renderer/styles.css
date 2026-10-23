@@ -1,5 +1,5 @@
 @font-face{font-family:Pixel;src:url('./assets/pixel.woff2') format('woff2');font-display:swap}
-:root{font-family:'PingFang SC',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--ink);background:var(--canvas);font-size:14px;color-scheme:light}
+:root{font-family:'PingFang SC',-apple-system,BlinkMacSystemFont,'Microsoft YaHei','Noto Sans CJK SC','Source Han Sans SC',sans-serif;color:var(--ink);background:var(--canvas);font-size:14px;color-scheme:light}
 :root{
 --ink:#161616;--paper:#ffffff;--canvas:#f5f4ef;--soft:#eeeee6;--line:#deded5;--muted:#66665f;
 --yellow:#ffd12e;--yellow-soft:#fff4c2;--on-accent:#161616;--orange:#ff5a1f;--danger:#c8341b;--success:#2b8555;
@@ -78,6 +78,13 @@ color:var(--ink);background:var(--canvas);color-scheme:dark}
 .precheck-missing li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
 .precheck-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
 [data-theme=dark] .precheck-dialog{background:var(--paper)}
+.credential-dialog{width:min(420px,92vw);padding:24px;border:3px solid var(--ink);border-radius:0;background:var(--canvas);color:var(--ink)}
+.credential-dialog::backdrop{background:rgb(0 0 0 / 53%)}
+.credential-dialog h3{margin:0 0 8px;font-size:18px}
+.credential-dialog p{font-size:13px;line-height:1.7}
+.credential-dialog input{width:100%;box-sizing:border-box;margin:14px 0 6px;padding:9px 10px;font:inherit;border:2px solid var(--ink);background:var(--paper);color:var(--ink)}
+.credential-dialog .dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+[data-theme=dark] .credential-dialog{background:var(--paper)}
 .credential-row{align-items:flex-start}
 .credential-field{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .key-input{width:min(420px,100%);min-height:34px;border:2px solid var(--ink);background:var(--canvas);color:var(--ink);padding:6px 10px;font-size:13px;font-family:monospace}

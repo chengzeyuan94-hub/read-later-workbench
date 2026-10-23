@@ -6,6 +6,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSyn
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveE11Paths } from '../src/main/e11-isolation.js';
+import { isCanonicalPath } from '../src/main/fs-paths.js';
 import { boundedFile, readFixedAsset, sha256, sha256File } from '../src/main/editor-media.js';
 import { pointLength, pointSlice, validateDocument, validateSource, validateSourceReference, validateTranscript, type SourceReference } from '../src/editor-core/model.js';
 import { validateNativeOutput, type OcrJobToken } from '../src/main/ocr-store.js';
@@ -40,12 +41,12 @@ export function tableSnapshot(db: Database.Database): Record<string, E11Table> {
  * recorded by the upgrade manifest separately; this list describes file bytes. */
 export function treeFiles(root: string, prefix = ''): E11File[] {
   if (!existsSync(root)) return [];
-  if (lstatSync(root).isSymbolicLink() || !statSync(root).isDirectory() || realpathSync(root) !== root) throw new Error('资源目录不能使用符号链接或别名');
+  if (lstatSync(root).isSymbolicLink() || !statSync(root).isDirectory() || !isCanonicalPath(root)) throw new Error('资源目录不能使用符号链接或别名');
   const output: E11File[] = [];
   const walk = (relative: string): void => {
     for (const entry of readdirSync(path.join(root, relative), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const item = path.join(relative, entry.name), file = path.join(root, item), info = lstatSync(file);
-      if (info.isSymbolicLink() || realpathSync(file) !== file) throw new Error('资源包含符号链接或路径别名');
+      if (info.isSymbolicLink() || !isCanonicalPath(file)) throw new Error('资源包含符号链接或路径别名');
       if (info.isDirectory()) walk(item);
       else if (info.isFile()) output.push({ path: path.posix.join(prefix, item.split(path.sep).join('/')), bytes: info.size, sha256: sha256File(file) });
       else throw new Error('资源包含非普通文件');

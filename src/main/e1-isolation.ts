@@ -1,5 +1,6 @@
 import { lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import { isCanonicalPath } from './fs-paths.js';
 export interface E1Paths {
     root: string;
     dataDir: string;
@@ -21,7 +22,7 @@ function noAliases(value: string): void { let current = path.parse(value).root; 
     const info = entry(current);
     if (info?.isSymbolicLink())
         throw new Error('E1 refuses symlink or aliased paths');
-} if (entry(value) && realpathSync(value) !== value)
+} if (entry(value) && !isCanonicalPath(value))
     throw new Error('E1 refuses path aliases'); }
 /** No default. Validation happens before Electron userData or Store may be opened. */
 export function resolveE1Paths(value: string | undefined, options: {

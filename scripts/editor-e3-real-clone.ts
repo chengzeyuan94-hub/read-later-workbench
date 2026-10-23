@@ -6,6 +6,7 @@ import path from 'node:path';
 import { resolveE3FixPaths } from '../src/main/e3-fix-isolation.js';
 import { createE3RealPaths, resolveE3RealPaths } from '../src/main/e3-real-isolation.js';
 import { sha256File } from '../src/main/editor-media.js';
+import { isCanonicalPath } from '../src/main/fs-paths.js';
 
 type Row = Record<string, any>;
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -39,7 +40,7 @@ export async function cloneEditorE3Real(options: { source: string | undefined; t
 
   const resources: { path: string; sha256: string; bytes: number }[] = [];
   function copyTree(from: string, to: string): void {
-    if (realpathSync(from) !== from || lstatSync(from).isSymbolicLink()) throw Error('Source aliases refused');
+    if (!isCanonicalPath(from) || lstatSync(from).isSymbolicLink()) throw Error('Source aliases refused');
     mkdirSync(to, { recursive: true, mode: 0o700 });
     for (const entry of readdirSync(from, { withFileTypes: true })) {
       const a = path.join(from, entry.name), b = path.join(to, entry.name);

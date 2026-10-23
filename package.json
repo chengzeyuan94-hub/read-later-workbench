@@ -3,6 +3,14 @@
   "productName": "收藏阅读工作台",
   "version": "0.1.0",
   "private": false,
+  "description": "本地优先的收藏阅读工作台：导入小红书 / B站 / 微博 / 知乎 / X 收藏，离线阅读并以 OCR、转录与 AI 整理为导图与 Markdown",
+  "license": "MIT",
+  "author": "chengzeyuan94-hub",
+  "homepage": "https://github.com/chengzeyuan94-hub/read-later-workbench",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chengzeyuan94-hub/read-later-workbench.git"
+  },
   "type": "module",
   "main": "dist/main/main.js",
   "engines": {
@@ -13,7 +21,7 @@
     "build": "npm run typecheck && vite build && tsc -p tsconfig.main.json && node scripts/build-preload.mjs",
     "start": "electron .",
     "dev": "npm run build && electron .",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "test": "node --import tsx --test --test-timeout=120000 \"tests/*.test.ts\"",
     "native:prepare": "node scripts/native.mjs",
     "native:verify": "node scripts/sqlite-probe.cjs && electron scripts/sqlite-probe.cjs",
     "fixture:prepare": "node --import tsx scripts/prepare-fixture.ts",
@@ -21,14 +29,20 @@
     "verify": "npm run typecheck && npm test && npm run build && npm run native:verify",
     "e0:typecheck": "tsc --noEmit -p spikes/editor-e0/tsconfig.json",
     "e0:build": "npm run e0:typecheck && vite build --config spikes/editor-e0/vite.config.ts && node scripts/build-editor-e0.mjs",
-    "e0:test": "node --import tsx --test spikes/editor-e0/tests/*.test.ts tests/e0-*.test.ts",
+    "e0:test": "node --import tsx --test \"spikes/editor-e0/tests/*.test.ts\" \"tests/e0-*.test.ts\"",
     "batch:prepare": "node --import tsx scripts/batch-clone.ts",
     "batch:build": "node scripts/batch-build.mjs",
     "batch:start": "zsh scripts/start-batch-e42.sh",
-    "batch:test": "node --import tsx --test tests/batch-*.test.ts tests/social-sources.test.ts tests/twitter-source.test.ts tests/source-account-cache.test.ts",
-    "batch:audit": "node --import tsx scripts/batch-audit.ts"
+    "batch:test": "node --import tsx --test \"tests/batch-*.test.ts\" tests/social-sources.test.ts tests/twitter-source.test.ts tests/source-account-cache.test.ts",
+    "batch:audit": "node --import tsx scripts/batch-audit.ts",
+    "dist": "npm run build && node scripts/prepare-package.mjs && electron-builder --publish never",
+    "dist:mac": "npm run build && node scripts/prepare-package.mjs && electron-builder --mac --publish never",
+    "dist:win": "npm run build && node scripts/prepare-package.mjs && electron-builder --win --publish never",
+    "dist:linux": "npm run build && node scripts/prepare-package.mjs && electron-builder --linux --publish never"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@ffprobe-installer/ffprobe": "^2.1.2",
     "better-sqlite3": "13.0.3",
     "fflate": "0.8.3",
     "prosemirror-commands": "1.7.2",
@@ -41,13 +55,12 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@ffprobe-installer/ffprobe": "^2.1.2",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "electron": "44.8.0",
+    "electron-builder": "26.17.0",
     "esbuild": "0.28.2",
     "tsx": "4.23.15",
     "typescript": "5.9.3",

@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, mkdirSync } from 'node:fs';
-import { realpath, rename, stat, writeFile } from 'node:fs/promises';
+import { realpath, stat, writeFile } from 'node:fs/promises';
+import { renameRetry } from './fs-paths.js';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { MediaRecord } from '../shared/contracts.js';
@@ -77,7 +78,7 @@ export async function mediaThumbnail(mediaDir: string, record: MediaRecord, widt
         mkdirSync(dir, { recursive: true });
         const temporary = `${target}.${process.pid}.tmp`;
         await writeFile(temporary, jpeg);
-        await rename(temporary, target);
+        await renameRetry(temporary, target);
         return target;
       } catch { return null; }
     })();

@@ -29,9 +29,9 @@ function fixture(text='只有满足条件时才可使用25mg，不超过30天。
 test('DeepSeek defaults use only their own credential and fixed official origin in an isolated synthetic environment',()=>{
  mkdirSync(root,{recursive:true});
  const providerUrl=pathToFileURL(path.join(project,'src/main/deepseek-generation-provider.ts')).href;
- const loader=path.join(project,'node_modules/tsx/dist/loader.mjs');
+ const loader=pathToFileURL(path.join(project,'node_modules/tsx/dist/loader.mjs')).href;
  const source=`import assert from 'node:assert/strict';import {DeepSeekGenerationProvider} from ${JSON.stringify(providerUrl)};let calls=0;const provider=new DeepSeekGenerationProvider({networkAllowed:true,fetchImpl:async(url,init)=>{calls++;assert.equal(url,'https://api.deepseek.com/models');assert.equal(init.headers.Authorization,'Bearer dummy-ds-env');return new Response(JSON.stringify({object:'list',data:[{id:'deepseek-flash'}]}),{headers:{'content-type':'application/json'}});}});if(process.env.DEEPSEEK_API_KEY){await provider.discoverModel();assert.equal(calls,1);}else{assert.equal(provider.configured(),false);await assert.rejects(provider.discoverModel(),e=>e.code==='waiting-configuration');assert.equal(calls,0);}`;
- for(const configured of [false,true])execFileSync(process.execPath,['--import',loader,'--input-type=module','-e',source],{cwd:project,env:{PATH:'/usr/bin:/bin',TMPDIR:root,SILICONFLOW_API_KEY:'dummy-sf-env',...(configured?{DEEPSEEK_API_KEY:'dummy-ds-env'}:{})},stdio:'pipe'});
+ for(const configured of [false,true])execFileSync(process.execPath,['--import',loader,'--input-type=module','-e',source],{cwd:project,env:process.platform==='win32'?{PATH:process.env.PATH??'',SystemRoot:process.env.SystemRoot,TEMP:root,TMP:root,SILICONFLOW_API_KEY:'dummy-sf-env',...(configured?{DEEPSEEK_API_KEY:'dummy-ds-env'}:{})}:{PATH:'/usr/bin:/bin',TMPDIR:root,SILICONFLOW_API_KEY:'dummy-sf-env',...(configured?{DEEPSEEK_API_KEY:'dummy-ds-env'}:{})},stdio:'pipe'});
 });
 
 test('DeepSeek discovers only exact reviewed account IDs with conservative budgets and no source upload',async()=>{

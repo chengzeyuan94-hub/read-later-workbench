@@ -1,4 +1,5 @@
-import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { isCanonicalPath, renameSyncRetry, safeFilename } from './fs-paths.js';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { getDraftAssetRefs, plainText, pointSlice, referenceDescription, transcriptTimeDescription, serializeDraftMarkdown, markdownRuns, type AssetRef, type DraftBlock, type TextRun, type SourceReference } from '../editor-core/model.js';
@@ -9,7 +10,7 @@ export function exportFilename(title: string): string { const clean = title.norm
     if (Buffer.byteLength(result + char, 'utf8') > 140)
         break;
     result += char;
-} return result || '整理稿'; }
+} return safeFilename(result, '整理稿'); }
 const escape = (text: string) => text.replace(/([\\`*_\[\]<>])/g, '\\$1');
 /** Freeze and validate saved versions before opening/publishing any external target. */
 export function prepareMarkdown(repository: EditorRepository, workspaceId: string, kind: EditorExportKind, expected: {
@@ -124,7 +125,7 @@ export function exportMarkdown(repository: EditorRepository, workspaceId: string
     if (!path.isAbsolute(chosenPath) || chosenPath !== path.normalize(chosenPath)) throw new Error('导出位置无效');
     const {bundle,markdown,assets}=prepareMarkdown(repository,workspaceId,kind,expected);
     const parent = path.dirname(chosenPath);
-    if (!existsSync(parent) || realpathSync(parent) !== parent || lstatSync(parent).isSymbolicLink())
+    if (!existsSync(parent) || !isCanonicalPath(parent) || lstatSync(parent).isSymbolicLink())
         throw new Error('导出父目录不存在或使用别名');
     const hasImages = assets.size > 0, selectedBase = path.basename(chosenPath).replace(/\.md$/i, ''), base = exportFilename(selectedBase || bundle.workspace.userTitle);
     const temp = mkdtempSync(path.join(parent, '.rlw-export-'));
@@ -148,7 +149,7 @@ export function exportMarkdown(repository: EditorRepository, workspaceId: string
             target = path.join(parent, `${base}-${randomUUID()}`);
             while (existsSync(target))
                 target = path.join(parent, `${base}-${randomUUID()}`);
-            renameSync(temp, target);
+            renameSyncRetry(temp, target);
         }
         else {
             let n = 1;

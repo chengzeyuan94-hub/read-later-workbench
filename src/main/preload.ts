@@ -87,7 +87,17 @@ ipcRenderer.on('rlw:before-close', (_event, nonce: string) => {
     await ipcRenderer.invoke('rlw:close-response', nonce, allow);
   })();
 });
+const credentialModal = {
+  set: (provider: 'siliconflow' | 'deepseek', value: string) => ipcRenderer.invoke('rlw:credentials-set', provider, value),
+  cancel: (provider: 'siliconflow' | 'deepseek') => ipcRenderer.invoke('rlw:credentials-cancel', provider),
+  onOpen(handler: (request: { provider: 'siliconflow' | 'deepseek'; label: string; purpose: string }) => void) {
+    const listener = (_event: unknown, request: { provider: 'siliconflow' | 'deepseek'; label: string; purpose: string }) => handler(request);
+    ipcRenderer.on('rlw:credential-open', listener);
+    return () => { ipcRenderer.removeListener('rlw:credential-open', listener); };
+  },
+};
 const api: WorkbenchAPI = {
+  credentials: credentialModal,
   ...(process.argv.includes('--rlw-batch-enabled')?{batch,pauseDownloads:()=>ipcRenderer.invoke('rlw:downloads-pause'),resumeDownloads:()=>ipcRenderer.invoke('rlw:downloads-resume'),resumePlatform:(platform:Platform)=>ipcRenderer.invoke('rlw:downloads-resume-platform',platform)}:{}),
   ...(process.argv.includes('--rlw-editor-enabled') ? { editor, digestPipeline } : {}),
   ...(process.argv.includes('--rlw-ocr-enabled')?{ocr}:{}),

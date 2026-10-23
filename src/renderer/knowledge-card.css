@@ -19,7 +19,7 @@
   display: flex;
   flex-direction: column;
   padding: 42px 46px 36px;
-  font-family: 'PingFang SC', -apple-system, 'Noto Sans SC', sans-serif;
+  font-family: 'PingFang SC', -apple-system, 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
 }
 .kc-head {
   display: flex;
@@ -63,7 +63,7 @@
   overflow-wrap: anywhere;
 }
 .kc-viewpoint.kc-pixel {
-  font-family: Pixel, 'PingFang SC', sans-serif;
+  font-family: Pixel, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
   letter-spacing: 1px;
 }
 .kc-viewpoint.kc-sans {

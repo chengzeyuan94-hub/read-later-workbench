@@ -1,5 +1,6 @@
 import { lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import { isCanonicalPath } from './fs-paths.js';
 import type { E1Paths } from './e1-isolation.js';
 
 export function isE3RealBuildName(name: string): boolean {
@@ -38,7 +39,7 @@ function canonical(file: string): void {
     current = path.join(current, part);
     if (entry(current)?.isSymbolicLink()) throw new Error('E3真实验收拒绝符号链接');
   }
-  if (entry(file) && realpathSync(file) !== file) throw new Error('E3真实验收拒绝路径别名');
+  if (entry(file) && !isCanonicalPath(file)) throw new Error('E3真实验收拒绝路径别名');
 }
 
 /** Only an explicit direct child of the new namespace can contain a writable copy. */

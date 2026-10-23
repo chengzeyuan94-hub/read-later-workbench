@@ -6,11 +6,12 @@ import { chmod,mkdir,readFile,readdir,rename,stat,symlink,writeFile } from 'node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AsrMediaError,DEFAULT_ASR_PREPARATION_CONFIG,DEFAULT_FFMPEG_PATH,asrFileSha256,inspectPreparedWav,isAsrPreparationNamespacePath,prepareMediaChunks,probeMedia } from '../src/main/asr-media.js';
+import { qaToolPath } from '../src/main/media-tools.js';
 
 // Synthetic PCM and installed local tools only. No provider or network is used.
 const project=realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'));
 const root=path.join(project,'.acceptance-data/editor-e3-fix',`asr-paths-${Date.now()}-${randomUUID().slice(0,8)}`);
-const ffprobePath=path.join(project,'.runtime/qa/package/ffprobe');
+const ffprobePath=qaToolPath('ffprobe');
 const config={...DEFAULT_ASR_PREPARATION_CONFIG,chunkDurationMs:200};
 const sha256=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
 function pcm(frames=8001):Buffer{
@@ -25,7 +26,7 @@ test('ASR preparation accepts only exact E2/E3/E3-fix namespaces with absolute n
  for(const namespace of ['editor-e2','editor-e3','editor-e3-fix'])assert.equal(isAsrPreparationNamespacePath(path.join(project,'.acceptance-data',namespace,'synthetic-copy','asr-prepared')),true,namespace);
  for(const namespace of ['formal','editor-e4','editor-e30','editor-e3-other','editor-e3-fix-other','editor-e2-fix'])assert.equal(isAsrPreparationNamespacePath(path.join(project,'.acceptance-data',namespace,'synthetic-copy','asr-prepared')),false,namespace);
  const valid=path.join(project,'.acceptance-data/editor-e3-fix','synthetic-copy','asr-prepared');
- for(const invalid of ['.acceptance-data/editor-e3/copy',path.join(project,'formal-data','asr-prepared'),path.join(project,'.acceptance-data/editor-e3'),`${valid}/../alias`,valid.replace('/.acceptance-data/','//.acceptance-data/'),`${valid}\n`,`${valid}\0`])assert.equal(isAsrPreparationNamespacePath(invalid),false,JSON.stringify(invalid));
+ for(const invalid of ['.acceptance-data/editor-e3/copy',path.join(project,'formal-data','asr-prepared'),path.join(project,'.acceptance-data/editor-e3'),`${valid}${path.sep}..${path.sep}alias`,valid.replace(`${path.sep}.acceptance-data${path.sep}`,`${path.sep}${path.sep}.acceptance-data${path.sep}`),`${valid}\n`,`${valid}\0`])assert.equal(isAsrPreparationNamespacePath(invalid),false,JSON.stringify(invalid));
 });
 
 test('installed FFmpeg prepares and reuses validated PCM chunks in all three allowed namespaces inside a fresh E3-fix fixture',async(t)=>{
@@ -52,24 +53,32 @@ test('ASR prepare refuses other namespaces and lexical aliases before creating o
  assert.equal(existsSync(path.join(f.dir,'.acceptance-data')),false,'rejected lexical paths must not create even their missing ancestors');
 });
 
-test('ASR E3-fix preparation still rejects symlink ancestors, symlink leaves, and unwritable directories',async()=>{
- const f=await fixture('filesystem-refusal'),target=path.join(f.dir,'ordinary-target'),alias=path.join(f.dir,'linked-parent');await mkdir(target);await symlink(target,alias);
- await code(prepareMediaChunks({probe:f.probe,outputDir:path.join(alias,'prepared'),config}),'permission-denied');assert.deepEqual(await readdir(target),[]);
- await code(prepareMediaChunks({probe:f.probe,outputDir:alias,config}),'permission-denied');assert.deepEqual(await readdir(target),[]);
+// Unprivileged Windows links are junctions (directories only); file links may be impossible there.
+async function linkOrReport(t:test.TestContext,target:string,alias:string):Promise<boolean>{
+ const kind=(await stat(target)).isDirectory()?'junction':'file';
+ try{await symlink(target,alias,process.platform==='win32'?kind:undefined);return true;}
+ catch(error){if(process.platform==='win32'&&(error as NodeJS.ErrnoException).code==='EPERM'){t.diagnostic(`skipping link case: symlink creation needs privilege on Windows (${(error as NodeJS.ErrnoException).code})`);return false;}throw error;}
+}
+test('ASR E3-fix preparation still rejects symlink ancestors, symlink leaves, and unwritable directories',async(t)=>{
+ const f=await fixture('filesystem-refusal'),target=path.join(f.dir,'ordinary-target'),alias=path.join(f.dir,'linked-parent');await mkdir(target);
+ if(await linkOrReport(t,target,alias)){
+  await code(prepareMediaChunks({probe:f.probe,outputDir:path.join(alias,'prepared'),config}),'permission-denied');assert.deepEqual(await readdir(target),[]);
+  await code(prepareMediaChunks({probe:f.probe,outputDir:alias,config}),'permission-denied');assert.deepEqual(await readdir(target),[]);
+ }
  const readonly=path.join(f.dir,'read-only');await mkdir(readonly);await chmod(readonly,0o555);try{await code(prepareMediaChunks({probe:f.probe,outputDir:readonly,config}),'permission-denied');assert.deepEqual(await readdir(readonly),[]);}finally{await chmod(readonly,0o700);}
 });
 
-test('expanded ASR namespaces retain frozen original byte/hash and input-link checks',async()=>{
- const f=await fixture('frozen-input'),outputDir=path.join(f.dir,'must-not-create'),linkedInput=path.join(f.dir,'linked-input.wav');await symlink(f.originalPath,linkedInput);
- await code(prepareMediaChunks({probe:{...f.probe,originalPath:linkedInput},outputDir,config}),'file-unavailable');
+test('expanded ASR namespaces retain frozen original byte/hash and input-link checks',async(t)=>{
+ const f=await fixture('frozen-input'),outputDir=path.join(f.dir,'must-not-create'),linkedInput=path.join(f.dir,'linked-input.wav');
+ if(await linkOrReport(t,f.originalPath,linkedInput))await code(prepareMediaChunks({probe:{...f.probe,originalPath:linkedInput},outputDir,config}),'file-unavailable');
  await code(prepareMediaChunks({probe:{...f.probe,bytes:f.probe.bytes+1},outputDir,config}),'input-mismatch');
  await code(prepareMediaChunks({probe:{...f.probe,sha256:'a'.repeat(64)},outputDir,config}),'input-mismatch');
  const changed=Buffer.from(f.bytes);changed[changed.length-1]^=1;await writeFile(f.originalPath,changed);await code(prepareMediaChunks({probe:f.probe,outputDir,config}),'input-mismatch');assert.equal(existsSync(outputDir),false);
 });
 
-test('E3-fix cached preparation still rejects chunk hash, sample-range, and publication-symlink tampering',async()=>{
+test('E3-fix cached preparation still rejects chunk hash, sample-range, and publication-symlink tampering',async(t)=>{
  const f=await fixture('cache-refusal');
  const hashOutput=path.join(f.dir,'hash-cache'),hashChunks=await prepareMediaChunks({probe:f.probe,outputDir:hashOutput,config}),changed=await readFile(hashChunks[0].localPath);changed[changed.length-1]^=1;await writeFile(hashChunks[0].localPath,changed);await code(prepareMediaChunks({probe:f.probe,outputDir:hashOutput,config}),'input-mismatch');
  const rangeOutput=path.join(f.dir,'range-cache'),rangeChunks=await prepareMediaChunks({probe:f.probe,outputDir:rangeOutput,config}),manifestPath=path.join(path.dirname(rangeChunks[0].localPath),'manifest.json'),manifest=JSON.parse(await readFile(manifestPath,'utf8'));manifest.chunks[0].inputRange.endMs++;await writeFile(manifestPath,JSON.stringify(manifest));await code(prepareMediaChunks({probe:f.probe,outputDir:rangeOutput,config}),'input-mismatch');
- const linkOutput=path.join(f.dir,'link-cache'),linkChunks=await prepareMediaChunks({probe:f.probe,outputDir:linkOutput,config}),published=path.dirname(linkChunks[0].localPath),held=path.join(f.dir,'held-cache');await rename(published,held);await symlink(held,published);await code(prepareMediaChunks({probe:f.probe,outputDir:linkOutput,config}),'input-mismatch');
+ const linkOutput=path.join(f.dir,'link-cache'),linkChunks=await prepareMediaChunks({probe:f.probe,outputDir:linkOutput,config}),published=path.dirname(linkChunks[0].localPath),held=path.join(f.dir,'held-cache');await rename(published,held);if(await linkOrReport(t,held,published))await code(prepareMediaChunks({probe:f.probe,outputDir:linkOutput,config}),'input-mismatch');
 });

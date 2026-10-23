@@ -6,13 +6,15 @@ import { fileURLToPath } from 'node:url';
 import { assertOrdinaryOutput } from './e111-build-paths.mjs';
 
 // Compilation is a build step. Electron spawns only the resulting executable.
-if (process.platform !== 'darwin') throw new Error('Apple Vision OCR helper requires macOS');
+// Generic prepare flows call this on every OS; a non-macOS host is a clean skip.
+if (process.platform !== 'darwin') { console.log('build-ocr-helper: skipped (Apple Vision OCR is macOS-only)'); process.exit(0); }
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = path.join(root, 'native', 'ocr-helper.swift');
 const buildRoot = path.resolve(root, process.env.RLW_BUILD_DIR || 'dist/editor-e111');
 const acceptanceRoot = path.join(root, '.acceptance-data', 'editor-e111');
-if (buildRoot !== path.join(root, 'dist', 'editor-e111') && !buildRoot.startsWith(acceptanceRoot + path.sep)) {
-  throw new Error('E1.1.1 helper output must use dist/editor-e111 or a new .acceptance-data/editor-e111 child; sealed older outputs are protected');
+const packageRoot = path.join(root, 'dist', 'package-native');
+if (buildRoot !== path.join(root, 'dist', 'editor-e111') && buildRoot !== packageRoot && !buildRoot.startsWith(acceptanceRoot + path.sep)) {
+  throw new Error('E1.1.1 helper output must use dist/editor-e111, dist/package-native, or a new .acceptance-data/editor-e111 child; sealed older outputs are protected');
 }
 const outputDir = path.join(buildRoot, 'native');
 assertOrdinaryOutput(outputDir);
