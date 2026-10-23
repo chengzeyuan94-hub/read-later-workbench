@@ -15,7 +15,9 @@ export interface OcrCorrection {resultId:string;revision:number;blocks:OcrCorrec
 export interface OcrSavedVersion {kind:'original'|'correction';revision:number}
 export interface OcrDocument {result:OcrResult;correction:OcrCorrection|null;correctionHead:number;correctionHistory:{revision:number;savedAt:number}[];adopted:OcrSavedVersion}
 export interface OcrProgress {preparing?:number;inspecting?:number;waitingCapability?:number;total:number;succeeded:number;noText:number;partial:number;waitingFiles:number;failed:number;queued:number;running:number;cancelled:number}
-export interface OcrCapability {available:boolean;reason?:string;engine?:OcrEngine}
+export interface OcrCapability {available:boolean;supported?:boolean;reason?:string;engine?:OcrEngine}
+/** Image recognition is macOS-only (Apple Vision); other platforms digest text-only. */
+export const OCR_UNSUPPORTED_REASON = '此系统暂不支持本机图片文字识别，图片未参与整理';
 export interface OcrSelection {mediaId:number;included:boolean;reason:string;roles:string[]}
 export interface OcrJob {id:string;mediaId:number;title:string;order:number;state:OcrJobState;attempts:number;error?:string;errorCode?:string;recovery?:'new-request'|'retry-frozen';inspection?:OcrImage;resultId?:string;reused:boolean}
 export interface OcrContentState {preparation?:{policyVersion:string|null;state:'legacy'|'preparing'|'frozen'|'blocked';frozen:number;selected:number};contentId:number;requestId:string|null;scopeRevisionId:string|null;totalMedia:number;selectedMedia:number;selection:OcrSelection[];jobs:OcrJob[];capability:OcrCapability;progress:OcrProgress;results:{resultId:string;mediaId:number;createdAt:number;coverage:OcrResult['coverage'];correctionHead:number;adopted:OcrSavedVersion;active:boolean}[]}

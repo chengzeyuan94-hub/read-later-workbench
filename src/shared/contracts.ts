@@ -133,7 +133,17 @@ export interface WorkbenchState {
 export interface DeletedContent { contentId: number; title: string; platform: string; accountId: string; sourceId: string; deletedAt: number; bytesFreed: number }
 export interface DeleteResult { deleted: number[]; blocked: { id: number; reason: string }[]; bytesFreed: number }
 export interface DeletePreview { bytes: number; blocked: { id: number; reason: string }[] }
+export type CredentialProviderId = 'siliconflow' | 'deepseek';
+export interface CredentialPromptRequest { provider: CredentialProviderId; label: string; purpose: string }
+export interface CredentialModalAPI {
+  set(provider: CredentialProviderId, value: string): Promise<{ configured: boolean }>;
+  cancel(provider: CredentialProviderId): Promise<{ cancelled: boolean }>;
+  onOpen(handler: (request: CredentialPromptRequest) => void): () => void;
+}
+
 export interface WorkbenchAPI {
+  /** In-app credential entry; the key never crosses back to the renderer. */
+  credentials?: CredentialModalAPI;
   batch?: BatchDigestAPI;
   pauseDownloads?(): Promise<void>;
   resumeDownloads?(): Promise<void>;

@@ -1,6 +1,7 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs, { chmodSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { setup, seed, png, request as saveRequest } from './e1-helpers.js';
@@ -34,6 +35,11 @@ function fixture(count = 2) {
   ocr.setCapability({ available: true, engine });
   return { ...f, id, editor, digest, ocr, savedManual, workspaceId: original.workspace.id, ref };
 }
+// These inject filesystem permission failures via chmod/mocked writes, so they
+// only run under the E112 isolated runner (its own TMPDIR root). Elsewhere they
+// skip with an explicit reason instead of failing.
+const e112Runner = os.tmpdir().includes(`${path.sep}.acceptance-data${path.sep}editor-e112${path.sep}`);
+const e112Test = (name: string, fn: () => void | Promise<void>) => test(name, { skip: e112Runner ? false : 'requires the E112 isolated test runner' }, fn);
 function click(f: ReturnType<typeof fixture>, renew = false) { const request = f.digest.request(f.id, renew).request!; f.ocr.syncAuthorized(); return request; }
 function scopeJSON(f: ReturnType<typeof fixture>, requestId: string): string { return (f.store.db.prepare('SELECT scope_json FROM digest_requests WHERE id=?').get(requestId) as any).scope_json; }
 function inspection(t: OcrJobToken): OcrInspectOutput { return { schemaVersion: 1, ok: true, op: 'inspect', engine: clone(t.engine), limits: {}, image: { sha256: t.media.sha256!, bytes: t.media.bytes, mime: t.media.mime, width: 1, height: 1, rawWidth: 1, rawHeight: 1, orientation: 1, orientationTransform: { normalizedDisplayToRaw: [1, 0, 0, 1, 0, 0] }, normalization: { policyVersion: 'imageio-decode-v2', basis: 'imageio-default-after-full-decode', decode: 'full-resolution' } } }; }
@@ -41,7 +47,7 @@ function recognition(t: OcrJobToken): OcrNativeOutput { const text = '明确标�
 function completeOne(f: ReturnType<typeof fixture>) { const t = f.ocr.nextInspection(engine)!; assert.ok(t); assert.equal(f.ocr.acceptInspection(t, inspection(t)), true); const recognitionToken = f.ocr.next(engine); if (recognitionToken) assert.equal(f.ocr.accept(recognitionToken, recognition(recognitionToken)), true); return t.media.id; }
 function assertNoFinalArtifacts(f: ReturnType<typeof fixture>) { assert.equal(f.digest.status(f.id).library, null); assert.equal((f.store.db.prepare('SELECT count(*) n FROM digest_calls').get() as any).n, 0); assert.equal(JSON.stringify(f.editor.load(f.workspaceId)), f.savedManual); assert.equal(f.editor.resolve(f.workspaceId, f.ref).selectedText, '原文🙂'); }
 
-test('E112 initial attachment writes classify injected ENOSPC/EACCES; retries keep original cause, successes and manual references; only an explicit new request freezes restored input', () => {
+e112Test('E112 initial attachment writes classify injected ENOSPC/EACCES; retries keep original cause, successes and manual references; only an explicit new request freezes restored input', () => {
   for (const systemCode of ['ENOSPC', 'EACCES']) {
     const f = fixture(); let restore = () => {};
     try {
@@ -72,7 +78,7 @@ test('E112 initial attachment writes classify injected ENOSPC/EACCES; retries ke
   }
 });
 
-test('E112 initially unwritable attachment directory is a permission failure; restoring permissions cannot fill the old scope, a new request can proceed', () => {
+e112Test('E112 initially unwritable attachment directory is a permission failure; restoring permissions cannot fill the old scope, a new request can proceed', () => {
   const f = fixture(1);
   try {
     chmodSync(f.editor.assetsDir, 0o500);
@@ -84,7 +90,7 @@ test('E112 initially unwritable attachment directory is a permission failure; re
   } finally { chmodSync(f.editor.assetsDir, 0o700); f.close(); }
 });
 
-test('E112 header filesystem codes outrank metadata interpretation while a real header incompatibility stays distinct', () => {
+e112Test('E112 header filesystem codes outrank metadata interpretation while a real header incompatibility stays distinct', () => {
   const expected = { EACCES: 'permission-denied', EPERM: 'permission-denied', EROFS: 'permission-denied', ENOSPC: 'disk-full', EDQUOT: 'disk-full', ENOENT: 'missing-file', ENOTDIR: 'file-unavailable', EIO: 'file-unavailable' };
   for (const [systemCode, code] of Object.entries(expected)) {
     const error = classifyFreezeError(Object.assign(new Error('/private/path must never leak'), { code: systemCode }), 'read-header');
@@ -94,7 +100,7 @@ test('E112 header filesystem codes outrank metadata interpretation while a real 
   assert.equal(classifyFreezeError(new Error('attachment validation'), 'pin-attachment').code, 'file-unavailable');
 });
 
-test('E112 already frozen same-SHA input remains retryable after a temporary permission failure and preserves its original scope', () => {
+e112Test('E112 already frozen same-SHA input remains retryable after a temporary permission failure and preserves its original scope', () => {
   const f = fixture(1); let original: string | undefined;
   try {
     const request = click(f), scope = scopeJSON(f, request.id), internal = f.digest.internalScope(request.id), media = internal.input.media[0];

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { accessSync, constants, createReadStream, createWriteStream, existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
-import { link, mkdir, mkdtemp, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { renameRetry } from './fs-paths.js';
+import { link, mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -95,7 +96,7 @@ export async function exportMarkdownPackage(repository:EditorRepository,workspac
    let reservation:string;
    for(;;){reservation=path.join(parent,`${base}-${randomUUID()}`);try{await mkdir(reservation,{mode:0o700});break;}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;}}
    target=path.join(reservation,base);
-   try{assertNotCancelled(options.signal);await rename(temp,target);}catch(e){await rm(reservation,{recursive:true,force:true});throw e;}
+   try{assertNotCancelled(options.signal);await renameRetry(temp,target);}catch(e){await rm(reservation,{recursive:true,force:true});throw e;}
   }else{
    target=path.join(parent,`${base}.md`);let n=1;
    for(;;){assertNotCancelled(options.signal);try{await link(path.join(temp,`${base}.md`),target);break;}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;target=path.join(parent,`${base} (${++n}).md`);}}

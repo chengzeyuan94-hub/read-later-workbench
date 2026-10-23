@@ -53,31 +53,43 @@ test('invalid, damaged, symlinked and unavailable provider credentials do not ex
 });
 
 test('the legacy credentials constructor and DeepSeek native configuration remain isolated and return booleans only', async () => {
- const { build } = await import('esbuild');
- // Bundle only in memory. Both native services are replaced; real provider env
- // values are compiled out before this module can execute.
- const bundled = await build({
-  stdin: { contents: "export {AsrCredentials} from './asr-credentials.ts'; export {fixture} from 'node:child_process';", resolveDir: path.resolve('src/main'), sourcefile: 'credential-constructor-unit.ts' },
-  bundle: true, platform: 'node', format: 'esm', write: false,
-  define: { 'process.env': '{}', 'process.platform': '"darwin"' },
-  plugins: [{ name: 'only-unit-native-services', setup(plugin) {
-   plugin.onResolve({ filter: /^electron$/ }, () => ({ path: 'electron', namespace: 'credential-unit' }));
-   plugin.onResolve({ filter: /^node:child_process$/ }, () => ({ path: 'spawn', namespace: 'credential-unit' }));
-   plugin.onLoad({ filter: /.*/, namespace: 'credential-unit' }, args => ({ contents: args.path === 'electron'
-    ? `export const safeStorage={isEncryptionAvailable:()=>true,encryptString:value=>Buffer.from('unit-test-cipher:'+value),decryptString:value=>value.toString('utf8').slice('unit-test-cipher:'.length)};`
-    : `import {EventEmitter} from 'node:events';export const fixture={calls:[],responses:[]};export function spawn(command,args,options){fixture.calls.push({command,args,options});const child=new EventEmitter();child.stdout=new EventEmitter();child.kill=()=>{queueMicrotask(()=>child.emit('close',1));return true;};const text=fixture.responses.shift();queueMicrotask(()=>{child.stdout.emit('data',Buffer.from(text+'\\n'));child.emit('close',0);});return child;}`,
-   }));
-  } }],
- });
- const module = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
- const root = fixture(), legacy = new module.AsrCredentials(root), deepseek = new module.AsrCredentials(root, 'deepseek');
+ // Injected fake storage keeps this on one code path with no real userData,
+ // OS keychain, provider environment values or supplied credentials.
+ const { AsrCredentials } = await import('../src/main/asr-credentials.js');
+ const root = fixture(), legacy = new AsrCredentials(root, 'siliconflow', [], encryption), deepseek = new AsrCredentials(root, 'deepseek', [], encryption);
  assert.deepEqual(legacy.status(), { configured: false }); assert.deepEqual(deepseek.status(), { configured: false });
- module.fixture.responses.push('unit-native-sf'); assert.deepEqual(await legacy.configure(), { configured: true });
+ const opened: string[] = [];
+ legacy.setRequestHandler(request => { opened.push(`${request.provider}:${request.label}`); });
+ deepseek.setRequestHandler(request => { opened.push(`${request.provider}:${request.label}`); });
+ const legacyPrompt = legacy.configure();
+ assert.match(opened[0], /^siliconflow:.*SiliconFlow 音视频转录/);
+ assert.deepEqual(legacy.store('unit-native-sf'), { configured: true });
+ assert.deepEqual(await legacyPrompt, { configured: true });
  assert.equal(legacy.read(), 'unit-native-sf'); assert.equal(deepseek.read(), undefined);
- module.fixture.responses.push('unit-native-ds'); assert.deepEqual(await deepseek.configure(), { configured: true });
+ const deepseekPrompt = deepseek.configure();
+ assert.match(opened[1], /^deepseek:.*官方 DeepSeek 文字生成/);
+ assert.deepEqual(deepseek.store('unit-native-ds'), { configured: true });
+ assert.deepEqual(await deepseekPrompt, { configured: true });
  assert.equal(legacy.read(), 'unit-native-sf'); assert.equal(deepseek.read(), 'unit-native-ds');
- assert.match(module.fixture.calls[0].args[1], /SiliconFlow 音视频转录/); assert.match(module.fixture.calls[1].args[1], /官方 DeepSeek 文字生成/);
- for (const call of module.fixture.calls) { assert.equal(call.command, '/usr/bin/osascript'); assert.match(call.args[1], /with hidden answer/); assert.doesNotMatch(call.args[1], /unit-native-/); assert.deepEqual(call.options.stdio, ['ignore', 'pipe', 'ignore']); }
  legacy.dispose(); deepseek.dispose(); assert.equal(legacy.read(), undefined); assert.equal(deepseek.read(), undefined);
- const calls = module.fixture.calls.length; assert.deepEqual(await deepseek.configure(), { configured: false }); assert.equal(module.fixture.calls.length, calls);
+ const calls = opened.length; assert.deepEqual(await deepseek.configure(), { configured: false }); assert.equal(opened.length, calls);
+});
+
+test('the in-app credential entry refuses Linux basic_text storage and never echoes a key', async () => {
+ const { AsrCredentials } = await import('../src/main/asr-credentials.js');
+ const { credentialStorageUnavailable } = await import('../src/main/credential-store.js');
+ const basic: CredentialEncryption = { ...encryption, getSelectedStorageBackend: () => 'basic_text' };
+ assert.match(credentialStorageUnavailable(basic, 'deepseek')!, /GNOME Keyring|KWallet/);
+ assert.match(credentialStorageUnavailable(basic, 'siliconflow')!, /SILICONFLOW_API_KEY/);
+ assert.equal(credentialStorageUnavailable(encryption, 'deepseek'), undefined);
+ const root = fixture(), credentials = new AsrCredentials(root, 'deepseek', [], basic);
+ let requests = 0; credentials.setRequestHandler(() => { requests += 1; });
+ assert.throws(() => credentials.configure(), /GNOME Keyring|KWallet/);
+ assert.equal(requests, 0); // The refusal happens before any prompt can open.
+ assert.throws(() => credentials.store('unit-basic-key'), /GNOME Keyring|KWallet/);
+ assert.equal(credentials.read(), undefined);
+ // A cancelled prompt resolves without a key and without another request.
+ const secure = new AsrCredentials(fixture(), 'deepseek', [], encryption);
+ const prompt = secure.configure(); secure.cancelConfigure();
+ assert.deepEqual(await prompt, { configured: false });
 });

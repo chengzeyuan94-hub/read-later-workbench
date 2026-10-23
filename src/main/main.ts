@@ -1,5 +1,5 @@
 import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, net, powerMonitor, protocol, session, shell } from 'electron';
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -35,12 +35,14 @@ import { asrMediaResponse } from './asr-media-response.js';
 import { e112BuildMode, resolveE112Paths } from './e112-isolation.js';
 import { OcrRepository } from './ocr-store.js';
 import { OcrHelperClient, OcrRunner } from './ocr-runner.js';
+import { OCR_UNSUPPORTED_REASON } from '../shared/ocr-contracts.js';
 import { exportOcrMarkdown } from './ocr-export.js';
 import { boundedFile, fixedAssetResponse, readFixedAsset } from './editor-media.js';
 import type { EditorRepository } from './editor-store.js';
 import { validateKnowledgeCardPayload } from '../shared/knowledge-card.js';
 import type { EditorExportKind, EditorExportOptions } from '../shared/editor-contracts.js';
 import { exportFilename } from './editor-export.js';
+import { toStoredPath } from './fs-paths.js';
 import { exportMarkdownPackage, previewExportMedia } from './editor-media-export.js';
 import { PREVIEW_CONFIG, savedPreview } from './editor-preview.js';
 import { isRendererFile } from './renderer-origin.js';
@@ -67,7 +69,7 @@ catch { console.error('E1隔离配置无效，请先使用准备入口并指定�
 // E1.1 runtime is deliberately confined to the prepared copy; formal rollout needs PM approval.
 const ocrEnabled = e11Mode;
 const editorEnabled = ocrEnabled || !!e1Paths || process.env.RLW_ENABLE_EDITOR === '1';
-const userData = e1Paths?.userDataDir || process.env.RLW_USER_DATA_DIR || path.join(app.getPath('appData'), 'ReadLaterWorkbench');
+const userData = e1Paths?.userDataDir || process.env.RLW_USER_DATA_DIR || app.getPath('userData');
 mkdirSync(userData, { recursive: true, mode: 0o700 });
 app.setPath('userData', userData);
 if(batchPaths)app.setPath('sessionData',batchPaths.sourceSessionDataDir);
@@ -162,8 +164,8 @@ else {
     // Native text controls need the system edit roles (including Select All and
     // Paste); the app quit role still passes through the same save barrier.
     Menu.setApplicationMenu(Menu.buildFromTemplate([
-      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
-      { role: 'editMenu' }, { role: 'windowMenu' },
+      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : [{ role: 'fileMenu' as const }]),
+      { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
     ]));
     const dataDir = e1Paths?.dataDir || path.resolve(process.env.RLW_DATA_DIR || path.join(userData, 'data'));
     if(batchMode&&batchPaths){
@@ -218,13 +220,24 @@ else {
     if(ocrEnabled){
       if(!service.store.editor||!service.store.digestPipeline)throw new Error('图片文字需要已迁移的编辑与消化存储');
       ocrRepository=new OcrRepository(service.store.db,dataDir,service.store.editor,service.store.digestPipeline,e3Mode||e2Mode||e112Mode||e111Mode?{normalizationPolicy:'imageio-decode-v2'}:undefined);
-      ocrRunner=new OcrRunner(ocrRepository,new OcrHelperClient(path.join(projectRoot,'native/ocr-helper')),batchCoordinator?.hooks('ocr'));
-      await ocrRunner.probe(); // Metadata/capability only, never image recognition.
-      ocrRunner.start(); // Resumes only explicitly requested, still-valid frozen scopes.
+      if(process.platform==='darwin'){
+        // Packaged builds ship the helper under resources/native; development
+        // builds may place the same binary at native/ocr-helper in the repo.
+        const helperCandidates=[path.join(process.resourcesPath??'','native','ocr-helper'),path.join(projectRoot,'native','ocr-helper')];
+        const helperFile=helperCandidates.find(candidate=>{try{return lstatSync(candidate).isFile();}catch{return false;}})??helperCandidates[1];
+        ocrRunner=new OcrRunner(ocrRepository,new OcrHelperClient(helperFile),batchCoordinator?.hooks('ocr'));
+        await ocrRunner.probe(); // Metadata/capability only, never image recognition.
+        ocrRunner.start(); // Resumes only explicitly requested, still-valid frozen scopes.
+      } else {
+        // Apple Vision OCR is macOS-only; elsewhere the ocr stage is not required
+        // and items digest text-only. The capability reports unsupported, not failed.
+        ocrRepository.setCapability({available:false,supported:false,reason:OCR_UNSUPPORTED_REASON});
+      }
     }
     if(e2Mode||e3Mode){
       if(!service.store.digestPipeline)throw Error('转录需要隔离消化存储');
       asrCredentials=new AsrCredentials(userData,'siliconflow',batchPaths?[batchPaths.credentialUserDataDirs.siliconflow]:[]);
+      asrCredentials.setRequestHandler(request=>{if(win&&!win.isDestroyed())win.webContents.send('rlw:credential-open',request);});
       asrProvider=new SiliconFlowAsrProvider({apiKey:()=>asrCredentials?.read(),networkAllowed:()=>asrNetworkAllowed&&net.isOnline()});
       asrRepository=new AsrRepository(service.store.db,dataDir,service.store.digestPipeline,ASR_PROVIDER_CONFIG);
       asrRunner=new AsrRunner(asrRepository,{
@@ -238,6 +251,7 @@ else {
       if(!service.store.editor||!service.store.digestPipeline)throw Error('阅读创作需要明确 E3 隔离存储');
       generationRepository=new GenerationRepository(service.store.db,dataDir,service.store.editor,service.store.digestPipeline,{ocr:ocrRepository,asr:asrRepository});
       generationCredentials=new AsrCredentials(userData,'deepseek',batchPaths?[batchPaths.credentialUserDataDirs.deepseek]:[]);
+      generationCredentials.setRequestHandler(request=>{if(win&&!win.isDestroyed())win.webContents.send('rlw:credential-open',request);});
       const generationProvider=new DeepSeekGenerationProvider({apiKey:()=>generationCredentials?.read(),networkAllowed:()=>generationNetworkAllowed&&net.isOnline()});
       generationRunner=new GenerationRunner(generationRepository,generationProvider,{batch:batchCoordinator?.hooks('generation'),networkAllowed:generationNetworkAllowed&&net.isOnline(),beforeInstall:beforeGenerationInstall});
       service.store.digestPipeline.setGenerationCapability(generationProvider.configured(),generationProvider.configured()?'官方 DeepSeek 生成已接入；仅对明确新请求核实模型并处理':'等待官方 DeepSeek 生成安全配置与账户模型核验');
@@ -270,7 +284,7 @@ else {
       const record = service.getMedia(Number(url.pathname.slice(1)));
       const mediaDir = service.store.mediaDir;
       const thumb = record ? await mediaThumbnail(mediaDir, record, Number(url.searchParams.get('w')) || 0) : null;
-      return mediaResponse(request, mediaDir, thumb ? { ...record!, localPath: path.relative(await realpath(mediaDir), thumb), mime: 'image/jpeg' } : record);
+      return mediaResponse(request, mediaDir, thumb ? { ...record!, localPath: toStoredPath(path.relative(await realpath(mediaDir), thumb)), mime: 'image/jpeg' } : record);
     });
     const platform = (value: unknown): Platform => { if (!isPlatform(value)||!batchMode&&!['xiaohongshu','bilibili'].includes(value)) throw new Error('未知平台'); return value; };
     const id = (value: unknown): number => { if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error('无效内容ID'); return value; };
@@ -327,8 +341,16 @@ else {
     handle('digest-review', contentId => pipeline().review(id(contentId), Date.now()));
     handle('digest-artifact', contentId => pipeline().artifact(id(contentId)));
     const generation=()=>{if(!e3Mode||!generationRepository)throw Error('阅读创作只在明确 E3 隔离副本启用');return generationRepository;};
+    const applyGenerationCredential=(key:string)=>{generation();if(!generationCredentials)throw Error('官方 DeepSeek 生成配置尚未启用');const value=generationCredentials.store(key);pipeline().setGenerationCapability(value.configured,value.configured?'官方 DeepSeek 生成已配置，仅处理明确的新请求':'生成等待官方 DeepSeek 安全配置');generationRunner?.kick();return value;};
     handle('generation-configure',async()=>{generation();if(!generationCredentials)throw Error('官方 DeepSeek 生成配置尚未启用');const value=await generationCredentials.configure();pipeline().setGenerationCapability(value.configured,value.configured?'官方 DeepSeek 生成已配置，仅处理明确的新请求':'生成等待官方 DeepSeek 安全配置');generationRunner?.kick();return value;});
-    handle('generation-set-credential',key=>{generation();if(!generationCredentials)throw Error('官方 DeepSeek 生成配置尚未启用');const value=generationCredentials.store(key);pipeline().setGenerationCapability(value.configured,value.configured?'官方 DeepSeek 生成已配置，仅处理明确的新请求':'生成等待官方 DeepSeek 安全配置');generationRunner?.kick();return value;});
+    handle('generation-set-credential',key=>applyGenerationCredential(key));
+    // One in-app modal serves both providers on every platform; the key never returns to the renderer.
+    handle('credentials-set',(provider:string,key:string)=>{
+      if(provider==='siliconflow'){asr();if(!asrCredentials)throw Error('音视频转录配置尚未启用');const value=asrCredentials.store(key);pipeline().setASRCapability(value.configured,value.configured?'SiliconFlow 音视频转录已配置，等待明确请求':'音视频转录等待 SiliconFlow 安全配置');asrRunner?.kick();return value;}
+      if(provider==='deepseek')return applyGenerationCredential(key);
+      throw Error('未知密钥类型');
+    });
+    handle('credentials-cancel',(provider:string)=>{if(provider==='siliconflow')asrCredentials?.cancelConfigure();else if(provider==='deepseek')generationCredentials?.cancelConfigure();return{cancelled:true};});
     handle('generation-status',contentId=>generation().status(id(contentId)));
     handle('generation-touch',(contentId,sessionId,dirty)=>generation().touch(id(contentId),sessionId,dirty===undefined?true:boolean(dirty)));
     handle('generation-release',(contentId,sessionId)=>generation().release(id(contentId),sessionId));
@@ -366,7 +388,7 @@ else {
     handle('asr-adopt',(contentId,resultId,version)=>asr().adopt(id(contentId),resultId,version));
     handle('asr-retry',(contentId,mediaId,acknowledgeUnknown)=>{if(batchCoordinator){const cid=id(contentId);batchCoordinator.retry(batchItemOwner(cid).id,cid);return asr().list(cid);}const value=asr().retry(id(contentId),mediaId===undefined?undefined:id(mediaId),acknowledgeUnknown===undefined?false:boolean(acknowledgeUnknown));asrRunner?.kick();return value;});
     handle('asr-configure',async()=>{asr();const value=await asrCredentials!.configure();pipeline().setASRCapability(value.configured,value.configured?'SiliconFlow 音视频转录已配置，等待明确请求':'音视频转录等待 SiliconFlow 安全配置');asrRunner?.kick();return value;});
-    handle('asr-set-credential',key=>{asr();const value=asrCredentials!.store(key);pipeline().setASRCapability(value.configured,value.configured?'SiliconFlow 音视频转录已配置，等待明确请求':'音视频转录等待 SiliconFlow 安全配置');asrRunner?.kick();return value;});
+    handle('asr-set-credential',key=>{asr();if(!asrCredentials)throw Error('音视频转录配置尚未启用');const value=asrCredentials.store(key);pipeline().setASRCapability(value.configured,value.configured?'SiliconFlow 音视频转录已配置，等待明确请求':'音视频转录等待 SiliconFlow 安全配置');asrRunner?.kick();return value;});
     handle('asr-network',allowed=>{asr();return setProcessingAllowed(boolean(allowed));});
     handle('asr-export',async(contentId,selection)=>{
       const repository=asr(),cid=id(contentId);

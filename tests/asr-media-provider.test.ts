@@ -6,11 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_ASR_PREPARATION_CONFIG, DEFAULT_FFMPEG_PATH, AsrMediaError, asrFileSha256, inspectPreparedWav, prepareMediaChunks, probeMedia, runAsrProcess, type PreparedAsrChunk } from '../src/main/asr-media.js';
 import { ASR_PROVIDER_CONFIG, AsrProviderError, SiliconFlowAsrProvider } from '../src/main/asr-provider.js';
+import { qaToolPath } from '../src/main/media-tools.js';
 
 // These are mechanism fixtures: a synthetic PCM tone and injected HTTP responses, never speech quality evidence.
 const project = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.join(project, '.acceptance-data/editor-e2', `unit-media-${Date.now()}-${process.pid}`);
-const ffprobePath = path.join(project, '.runtime/qa/package/ffprobe');
+const ffprobePath = qaToolPath('ffprobe');
 function pcm(frames = 20_800): Buffer {
   const bytes = Buffer.alloc(44 + frames * 2); bytes.write('RIFF', 0); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write('WAVEfmt ', 8); bytes.writeUInt32LE(16, 16); bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(1, 22); bytes.writeUInt32LE(16000, 24); bytes.writeUInt32LE(32000, 28); bytes.writeUInt16LE(2, 32); bytes.writeUInt16LE(16, 34); bytes.write('data', 36); bytes.writeUInt32LE(frames * 2, 40);
   for (let i = 0; i < frames; i++) bytes.writeInt16LE(Math.round(8000 * Math.sin(i * Math.PI * 2 * 440 / 16000)), 44 + i * 2);

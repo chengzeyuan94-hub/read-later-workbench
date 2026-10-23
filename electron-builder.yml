@@ -1,0 +1,50 @@
+appId: com.lshu.readlaterworkbench
+productName: 收藏阅读工作台
+artifactName: read-later-workbench-${version}-${os}-${arch}.${ext}
+directories:
+  output: dist/packages
+  buildResources: build
+files:
+  - dist/**
+  - "!dist/packages/**"
+  - "!dist/package-native/**"
+  - package.json
+  - native/ocr-helper.swift
+  - "!**/*.map"
+asarUnpack:
+  - node_modules/better-sqlite3/**
+  - node_modules/@ffmpeg-installer/**
+  - node_modules/@ffprobe-installer/**
+# better-sqlite3 ships Node-API prebuilds that load under Electron unmodified.
+npmRebuild: false
+nodeGypRebuild: false
+mac:
+  extraResources:
+    # Staged by scripts/prepare-package.mjs; macOS-only Apple Vision OCR helper.
+    - from: dist/package-native/native
+      to: native
+      filter:
+        - "**/*"
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  minimumSystemVersion: "13.0"
+  # TODO: add signing identity + notarization credentials before public releases.
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+linux:
+  category: Utility
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]

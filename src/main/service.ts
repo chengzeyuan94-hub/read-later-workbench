@@ -1,5 +1,6 @@
 import { createWriteStream, readdirSync, rmSync } from 'node:fs';
-import { rename, rm, stat, statfs } from 'node:fs/promises';
+import { rm, stat, statfs } from 'node:fs/promises';
+import { renameRetry } from './fs-paths.js';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -707,7 +708,7 @@ export class WorkbenchService {
       if (!bytes || (expected > 0 && bytes !== expected)) throw new Error('Incomplete media response');
       const extension = mime.includes('jpeg') ? '.jpg' : mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : mime.includes('gif') ? '.gif' : mime.includes('video') ? '.mp4' : mime.includes('audio') ? '.m4a' : '.bin';
       const fileName = `${media.id}${extension}`;
-      await rename(temporaryPath, path.join(this.store.mediaDir, fileName));
+      await renameRetry(temporaryPath, path.join(this.store.mediaDir, fileName));
       if (!this.closed) this.store.downloadSaved(media.id, fileName, bytes, mime);
       this.platformSucceeded(platform);
       this.recentImport!.clearRetry(`media:${media.id}`);
@@ -835,7 +836,7 @@ export class WorkbenchService {
         if (!bytes || (expected > 0 && bytes !== expected)) throw new Error('Incomplete media response');
         const extension = mime.includes('jpeg') ? '.jpg' : mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : mime.includes('gif') ? '.gif' : mime.includes('video') ? '.mp4' : mime.includes('audio') ? '.m4a' : '.bin';
         const fileName = `${media.id}${extension}`;
-        await rename(temporaryPath, path.join(this.store.mediaDir, fileName));
+        await renameRetry(temporaryPath, path.join(this.store.mediaDir, fileName));
         if (!this.closed) this.store.downloadSaved(media.id, fileName, bytes, mime);
         this.sourceFailures.delete(owner.platform);
       } catch (error) {

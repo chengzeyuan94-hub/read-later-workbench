@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Download the Electron binary
+        run: node node_modules/electron/install.js
+      - run: npm run native:prepare
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: native:verify (node + electron sqlite bindings)
+        run: xvfb-run -a npm run native:verify
+        if: runner.os == 'Linux'
+      - name: native:verify (node + electron sqlite bindings)
+        run: npm run native:verify
+        if: runner.os != 'Linux'

@@ -6,11 +6,12 @@ import { chmod,mkdir,readFile,readdir,rename,stat,symlink,writeFile } from 'node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AsrMediaError,DEFAULT_ASR_PREPARATION_CONFIG,DEFAULT_FFMPEG_PATH,asrFileSha256,inspectPreparedWav,isAsrPreparationNamespacePath,prepareMediaChunks,probeMedia } from '../src/main/asr-media.js';
+import { qaToolPath } from '../src/main/media-tools.js';
 
 // Synthetic PCM and installed local tools only. No provider or network is used.
 const project=realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'));
 const root=path.join(project,'.acceptance-data/editor-e3-fix',`asr-paths-${Date.now()}-${randomUUID().slice(0,8)}`);
-const ffprobePath=path.join(project,'.runtime/qa/package/ffprobe');
+const ffprobePath=qaToolPath('ffprobe');
 const config={...DEFAULT_ASR_PREPARATION_CONFIG,chunkDurationMs:200};
 const sha256=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
 function pcm(frames=8001):Buffer{

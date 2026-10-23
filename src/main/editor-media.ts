@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { renameSyncRetry } from './fs-paths.js';
 import path from 'node:path';
 import type { AssetMetadata } from '../editor-core/model.js';
 export function sha256(bytes: Uint8Array | string): string { return createHash('sha256').update(bytes).digest('hex'); }
@@ -43,7 +44,7 @@ export function pinOcrOriginal(options:{mediaDir:string;localPath:string;assetsD
     const digest=sha256(bytes),extension=mime==='image/jpeg'?'jpg':mime==='image/webp'?'webp':'png',relativePath=`${digest.slice(0,2)}/${digest}.${extension}`;
     mkdirSync(path.join(options.assetsDir,digest.slice(0,2)),{recursive:true,mode:0o700});const target=path.join(options.assetsDir,relativePath);
     if(existsSync(target)){if(sha256(readFileSync(boundedFile(options.assetsDir,relativePath)))!==digest)throw new Error('固定原件摘要冲突');}
-    else{const temp=target+`.tmp-${randomUUID()}`;try{writeFileSync(temp,bytes,{flag:'wx',mode:0o600});if(sha256(readFileSync(temp))!==digest)throw new Error('原件固定校验失败');renameSync(temp,target);}finally{if(existsSync(temp))unlinkSync(temp);}}
+    else{const temp=target+`.tmp-${randomUUID()}`;try{writeFileSync(temp,bytes,{flag:'wx',mode:0o600});if(sha256(readFileSync(temp))!==digest)throw new Error('原件固定校验失败');renameSyncRetry(temp,target);}finally{if(existsSync(temp))unlinkSync(temp);}}
     return{id:`${options.workspaceId}-media-${options.mediaId}`,version:digest,relativePath,mime,sha256:digest};
 }
 export function imageInfo(bytes: Buffer): {
@@ -113,7 +114,7 @@ export function pinImage(options: {
             writeFileSync(temp, bytes, { flag: 'wx', mode: 0o600 });
             if (sha256(readFileSync(temp)) !== digest)
                 throw new Error('资源写入校验失败');
-            renameSync(temp, target);
+            renameSyncRetry(temp, target);
         }
         finally {
             if (existsSync(temp))

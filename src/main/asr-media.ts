@@ -1,15 +1,14 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream, constants, existsSync } from 'node:fs';
-import { access, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createReadStream, constants } from 'node:fs';
+import { renameRetry } from './fs-paths.js';
+import { resolveMediaTool } from './media-tools.js';
+import { access, lstat, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-/** E2 uses local tools already installed by the user; it never installs or downloads a tool. */
-const repoTool = (name: string) => path.resolve('.runtime/qa/package', name);
-const defaultTool = (envValue: string | undefined, name: string) =>
-  envValue || (existsSync(repoTool(name)) ? repoTool(name) : name);
-export const DEFAULT_FFMPEG_PATH = defaultTool(process.env.RLW_FFMPEG, 'ffmpeg');
-export const DEFAULT_FFPROBE_PATH = defaultTool(process.env.RLW_FFPROBE, 'ffprobe');
+/** Local tools only: env override → bundled installer → repo QA package → PATH; never downloads. */
+export const DEFAULT_FFMPEG_PATH = resolveMediaTool('ffmpeg', process.env.RLW_FFMPEG);
+export const DEFAULT_FFPROBE_PATH = resolveMediaTool('ffprobe', process.env.RLW_FFPROBE);
 export interface AsrPreparationConfig {
   version: 'pcm16-mono-16k-contiguous-v1';
   sampleRate: 16000;
@@ -296,7 +295,7 @@ export async function prepareMediaChunks(input: { probe: AsrMediaProbe; outputDi
     if ((await stat(probe.originalPath)).size !== probe.bytes || await asrFileSha256(probe.originalPath, input.signal) !== probe.sha256) throw new AsrMediaError('input-mismatch');
     const manifest = { schemaVersion: 1, identity, originalSha256: probe.sha256, configSha256, config, toolVersions: probe.toolVersions, containerDurationMs: probe.durationMs, actualDecodedDurationMs: totalFrames / 16, coverage: 'complete-decoded-audio-track', overlap: false, chunks: chunks.map(({ localPath, ...chunk }) => ({ ...chunk, file: path.basename(localPath) })) };
     await writeFile(path.join(staging, 'manifest.json'), JSON.stringify(manifest), { flag: 'wx', mode: 0o600 }); await syncFile(path.join(staging, 'manifest.json')); await syncDirectory(staging); checkAbort(input.signal);
-    await rename(staging, published); staging = undefined; await syncDirectory(outputDir);
+    await renameRetry(staging, published); staging = undefined; await syncDirectory(outputDir);
     return chunks;
   } catch (error) { checkAbort(input.signal); throw mediaError(error); }
   finally { if (staging) await rm(staging, { recursive: true, force: true }).catch(() => {}); }

@@ -11,24 +11,25 @@ if (!existsSync('.runtime/node24.node')) throw new Error('Node binding missing')
 
 // ASR media tests expect ffmpeg/ffprobe under .runtime/qa/package/. Provision them
 // from RLW_FFMPEG / RLW_FFPROBE, PATH / common install locations, or the
-// @ffmpeg-installer / @ffprobe-installer devDependency binaries.
+// @ffmpeg-installer / @ffprobe-installer dependency binaries.
 const qaPackage = '.runtime/qa/package';
+const exeName = name => process.platform === 'win32' ? `${name}.exe` : name;
 function findTool(name) {
   const envValue = process.env[`RLW_${name.toUpperCase()}`];
   if (envValue && existsSync(envValue)) return envValue;
   const dirs = [...(process.env.PATH || '').split(path.delimiter), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', `${process.env.HOME}/.local/bin`];
   for (const dir of dirs) {
-    const candidate = path.join(dir, name);
+    const candidate = path.join(dir, exeName(name));
     if (existsSync(candidate)) return candidate;
   }
-  const bundled = `node_modules/@${name}-installer/${process.platform}-${process.arch}/${name}`;
+  const bundled = `node_modules/@${name}-installer/${process.platform}-${process.arch}/${exeName(name)}`;
   if (existsSync(bundled)) return bundled;
   return null;
 }
 mkdirSync(qaPackage, {recursive:true});
 const missing = [];
 for (const name of ['ffmpeg', 'ffprobe']) {
-  const target = path.join(qaPackage, name);
+  const target = path.join(qaPackage, exeName(name));
   if (existsSync(target)) continue;
   const found = findTool(name);
   if (found) {
