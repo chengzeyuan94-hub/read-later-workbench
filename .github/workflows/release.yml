@@ -32,7 +32,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.os }}
-          path: dist/packages/*
+          path: |
+            dist/packages/*.dmg
+            dist/packages/*.zip
+            dist/packages/*.exe
+            dist/packages/*.AppImage
+            dist/packages/*.deb
           if-no-files-found: error
 
   release:
@@ -48,6 +53,8 @@ jobs:
           pattern: packages-*
           path: packages
           merge-multiple: true
+      - name: Publisher SHA-256 checksums
+        run: cd packages && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
           files: packages/*

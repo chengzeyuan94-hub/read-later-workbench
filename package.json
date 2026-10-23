@@ -1,11 +1,14 @@
 {
   "name": "read-later-workbench",
   "productName": "收藏阅读工作台",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "description": "本地优先的收藏阅读工作台：导入小红书 / B站 / 微博 / 知乎 / X 收藏，离线阅读并以 OCR、转录与 AI 整理为导图与 Markdown",
   "license": "MIT",
-  "author": "chengzeyuan94-hub",
+  "author": {
+    "name": "L叔 (chengzeyuan94-hub)",
+    "email": "chengzeyuan94-hub@users.noreply.github.com"
+  },
   "homepage": "https://github.com/chengzeyuan94-hub/read-later-workbench",
   "repository": {
     "type": "git",
